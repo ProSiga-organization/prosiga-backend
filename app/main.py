@@ -1,20 +1,14 @@
-# app/main.py
 
 from fastapi import FastAPI
-from .turma.router import router as turmas_router
-# ... importe outros roteadores que você venha a ter
+from .usuario.router import router as usuario_router
+from .database import engine, Base
 
-app = FastAPI(
-    title="PróSiga API",
-    description="API para o sistema de gerenciamento acadêmico PróSiga."
-)
-app.include_router(turmas_router)
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="PróSiga API", description="API do PróSiga.")
+app.include_router(usuario_router)
+Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 def health_check():
     return {"status": "ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=True)
-# ...existing code...
