@@ -7,6 +7,12 @@ from ..security import get_password_hash
 
 class UsuarioRepository:
 
+    def get_by_cpf(self, db: Session, cpf: str) -> model.Usuario | None:
+        """
+        Busca um usuário (de qualquer tipo) pelo CPF.
+        """
+        return db.query(model.Usuario).filter(model.Usuario.cpf == cpf).first()
+
     def get_aluno_para_ativacao(self, db: Session, cpf: str) -> model.Aluno | None:
         """
         Busca um aluno pelo CPF que esteja com status 'NOVO', 
@@ -21,10 +27,8 @@ class UsuarioRepository:
         """
         Ativa a conta de um aluno, atualizando email, senha e status.
         """
-        # Gera o hash da nova senha
         hashed_password = get_password_hash(dados_ativacao.senha)
         
-        # Atualiza os campos do objeto que já veio do banco
         aluno_db.email = dados_ativacao.email
         aluno_db.senha_hash = hashed_password
         aluno_db.status = model.StatusContaEnum.ATIVO
@@ -32,5 +36,3 @@ class UsuarioRepository:
         db.commit()
         db.refresh(aluno_db)
         return aluno_db
-
-    # Poderíamos ter aqui get_professor_para_ativacao, ativar_conta_professor, etc.
