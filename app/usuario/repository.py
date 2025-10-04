@@ -1,5 +1,3 @@
-# app/usuario/repository.py
-
 from sqlalchemy.orm import Session
 from . import schema 
 from .. import model
