@@ -6,6 +6,7 @@ from . import schema
 from .. import model
 from ..database import get_db
 from .repository import UsuarioRepository
+from .. import deps
 
 router = APIRouter(
     prefix="/usuarios",
@@ -27,6 +28,16 @@ def primeiro_acesso_aluno(dados_ativacao: schema.PrimeiroAcessoSchema, db: Sessi
         )
     aluno_ativado = repo.ativar_conta_aluno(db, aluno_db=aluno_db, dados_ativacao=dados_ativacao)
     return aluno_ativado
+
+# --- ENDPOINT PARA OBTER DADOS DO USUÁRIO LOGADO ---
+@router.get("/me", response_model=schema.UsuarioResponse, summary="Obtém os dados do usuário logado")
+def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
+    """
+    Retorna os dados do usuário que está autenticado.
+    A função 'get_current_user' é executada primeiro. Se o token for inválido,
+    este código nunca será alcançado e um erro 401 será retornado.
+    """
+    return current_user
 
 # --- ENDPOINT PARA UPLOAD DE CSV ---
 @router.post("/upload-csv", 
