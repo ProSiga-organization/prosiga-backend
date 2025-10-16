@@ -10,6 +10,10 @@ class UsuarioRepository:
         Busca um usuário (de qualquer tipo) pelo CPF.
         """
         return db.query(model.Usuario).filter(model.Usuario.cpf == cpf).first()
+    
+    def get_by_email(self, db: Session, email: str) -> model.Usuario | None:
+        """Busca um usuário (de qualquer tipo) pelo Email."""
+        return db.query(model.Usuario).filter(model.Usuario.email == email).first()
 
     def get_aluno_para_ativacao(self, db: Session, cpf: str) -> model.Aluno | None:
         """
