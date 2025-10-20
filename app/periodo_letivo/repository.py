@@ -26,3 +26,7 @@ class PeriodoLetivoRepository:
         if periodo:
             db.delete(periodo)
             db.commit()
+            
+    def get_current(self, db: Session) -> model.PeriodoLetivo | None:
+        """Encontra o período letivo mais recente."""
+        return db.query(model.PeriodoLetivo).order_by(model.PeriodoLetivo.ano.desc(), model.PeriodoLetivo.semestre.desc()).first()
