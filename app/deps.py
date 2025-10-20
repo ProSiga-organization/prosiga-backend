@@ -37,3 +37,26 @@ def get_current_user(db: Session = Depends(get_db), token: HTTPAuthorizationCred
             detail="Não foi possível validar as credenciais com o serviço de autenticação.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+def get_current_aluno(current_user: model.Usuario = Depends(get_current_user)) -> model.Aluno:
+    """
+    Verifica se o usuário logado é um Aluno. Se não for, lança um erro.
+    """
+    if not isinstance(current_user, model.Aluno):
+        raise HTTPException(status_code=403, detail="Acesso negado: Apenas para alunos.")
+    return current_user
+
+def get_current_professor(current_user: model.Usuario = Depends(get_current_user)) -> model.Professor:
+    """
+    Verifica se o usuário logado é um Professor.
+    """
+    if not isinstance(current_user, model.Professor):
+        raise HTTPException(status_code=403, detail="Acesso negado: Apenas para professores.")
+    return current_user
+
+def get_current_coordenador(current_user: model.Usuario = Depends(get_current_user)) -> model.Coordenador:
+    """
+    Verifica se o usuário logado é um Coordenador.
+    """
+    if not isinstance(current_user, model.Coordenador):
+        raise HTTPException(status_code=403, detail="Acesso negado: Apenas para coordenadores.")
+    return current_user
