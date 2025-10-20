@@ -50,3 +50,14 @@ def create_matricula(
     nova_matricula = repo.create(db, dados_matricula)
     
     return nova_matricula
+
+@router.get("/me", response_model=list[schema.MatriculaResponse], summary="Lista as matrículas do aluno logado")
+def get_my_matriculas(
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
+):
+    """
+    Retorna uma lista de todas as matrículas realizadas pelo aluno autenticado.
+    """
+    matriculas = repo.get_matriculas_by_aluno(db, id_aluno=current_aluno.id)
+    return matriculas

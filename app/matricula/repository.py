@@ -20,3 +20,7 @@ class MatriculaRepository:
         db.commit()
         db.refresh(matricula)
         return matricula
+    
+    def get_matriculas_by_aluno(self, db: Session, id_aluno: int) -> list[model.Matricula]:
+        """Retorna todas as matrículas de um aluno específico."""
+        return db.query(model.Matricula).filter(model.Matricula.id_aluno == id_aluno).all()
