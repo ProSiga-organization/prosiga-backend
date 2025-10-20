@@ -4,6 +4,7 @@ from . import schema
 from .. import model
 from ..database import get_db
 from .repository import PeriodoLetivoRepository
+from .. import deps
 
 router = APIRouter(
     prefix="/periodos-letivos",
@@ -13,9 +14,9 @@ router = APIRouter(
 repo = PeriodoLetivoRepository()
 
 @router.post("/", response_model=schema.PeriodoLetivoResponse, status_code=status.HTTP_201_CREATED)
-def create_periodo_letivo(request: schema.PeriodoLetivoCreate, db: Session = Depends(get_db)):
+def create_periodo_letivo(request: schema.PeriodoLetivoCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
     """Cria um novo período letivo."""
-    periodo = repo.save(db, model.PeriodoLetivo(**request.model_dump()))
+    periodo = repo.save(db, model.PeriodoLetivo(**request.model_dump(), coordenador_id=current_coordenador.id))
     return periodo
 
 @router.get("/", response_model=list[schema.PeriodoLetivoResponse])
@@ -32,15 +33,15 @@ def get_periodo_letivo_by_id(id: int, db: Session = Depends(get_db)):
     return periodo
 
 @router.put("/{id}", response_model=schema.PeriodoLetivoResponse)
-def update_periodo_letivo(id: int, request: schema.PeriodoLetivoCreate, db: Session = Depends(get_db)):
+def update_periodo_letivo(id: int, request: schema.PeriodoLetivoCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
     """Atualiza um período letivo existente."""
     if not repo.get_by_id(db, id):
         raise HTTPException(status_code=404, detail="Período letivo não encontrado.")
-    periodo = repo.save(db, model.PeriodoLetivo(id=id, **request.model_dump()))
+    periodo = repo.save(db, model.PeriodoLetivo(id=id, **request.model_dump(), coordenador_id=current_coordenador.id))
     return periodo
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_periodo_letivo(id: int, db: Session = Depends(get_db)):
+def delete_periodo_letivo(id: int, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
     """Apaga um período letivo."""
     if not repo.get_by_id(db, id):
         raise HTTPException(status_code=404, detail="Período letivo não encontrado.")
