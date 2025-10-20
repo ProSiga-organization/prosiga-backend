@@ -42,3 +42,14 @@ def delete_turma(id: int, db: Session = Depends(get_db), current_coordenador: mo
     if not repo.get_by_id(db, id):
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
     repo.delete(db, id)
+
+@router.get("/me", response_model=list[schema.TurmaResponse], summary="Lista as turmas do professor logado")
+def get_my_turmas(
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+
+    turmas = repo.get_turmas_by_professor(db, id_professor=current_professor.id)
+    if not turmas:
+        raise HTTPException(status_code=404, detail="Nenhuma turma encontrada para o professor logado.")
+    return turmas

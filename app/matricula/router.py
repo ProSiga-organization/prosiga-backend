@@ -60,4 +60,6 @@ def get_my_matriculas(
     Retorna uma lista de todas as matrículas realizadas pelo aluno autenticado.
     """
     matriculas = repo.get_matriculas_by_aluno(db, id_aluno=current_aluno.id)
+    if not matriculas:
+        raise HTTPException(status_code=404, detail="Nenhuma matrícula encontrada.")
     return matriculas
