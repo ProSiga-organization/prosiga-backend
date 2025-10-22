@@ -15,31 +15,30 @@ router = APIRouter(
 
 repo = UsuarioRepository()
 
-# --- ENDPOINT DE PRIMEIRO ACESSO ---
-@router.post("/primeiro-acesso/aluno", 
-             response_model=schema.AlunoResponse,
-             summary="Realiza o primeiro acesso de um aluno")
-def primeiro_acesso_aluno(dados_ativacao: schema.PrimeiroAcessoSchema, db: Session = Depends(get_db)):
-    aluno_db = repo.get_aluno_para_ativacao(db, cpf=dados_ativacao.cpf)
-    if not aluno_db:
+@router.post("/primeiro-acesso", 
+             response_model=schema.AnyUsuarioResponse,
+             summary="Realiza o primeiro acesso de qualquer usuário (Aluno, Professor, Coordenador)")
+def primeiro_acesso_usuario(dados_ativacao: schema.PrimeiroAcessoSchema, db: Session = Depends(get_db)):
+    
+    usuario_db = repo.get_usuario_para_ativacao(db, cpf=dados_ativacao.cpf)
+    
+    if not usuario_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="CPF não encontrado ou conta já ativa. Verifique os dados ou contacte a administração."
         )
-    aluno_ativado = repo.ativar_conta_aluno(db, aluno_db=aluno_db, dados_ativacao=dados_ativacao)
-    return aluno_ativado
+    
+    usuario_ativado = repo.ativar_conta(db, usuario_db=usuario_db, dados_ativacao=dados_ativacao)
+    
+    return usuario_ativado
 
-# --- ENDPOINT PARA OBTER DADOS DO USUÁRIO LOGADO ---
-@router.get("/me", response_model=schema.UsuarioResponse, summary="Obtém os dados do usuário logado")
+@router.get("/me", response_model=schema.AnyUsuarioResponse, summary="Obtém os dados do usuário logado")
 def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
     """
-    Retorna os dados do usuário que está autenticado.
-    A função 'get_current_user' é executada primeiro. Se o token for inválido,
-    este código nunca será alcançado e um erro 401 será retornado.
+    Retorna os dados do usuário que está autenticado (seja Aluno, Professor ou Coordenador).
     """
     return current_user
 
-# --- ENDPOINT PARA UPLOAD DE CSV ---
 @router.post("/upload-csv", 
              summary="Pré-cadastra novos usuários a partir de um ficheiro CSV",
              status_code=status.HTTP_201_CREATED)

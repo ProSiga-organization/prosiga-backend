@@ -15,26 +15,26 @@ class UsuarioRepository:
         """Busca um usuário (de qualquer tipo) pelo Email."""
         return db.query(model.Usuario).filter(model.Usuario.email == email).first()
 
-    def get_aluno_para_ativacao(self, db: Session, cpf: str) -> model.Aluno | None:
+    def get_usuario_para_ativacao(self, db: Session, cpf: str) -> model.Usuario | None:
         """
-        Busca um aluno pelo CPF que esteja com status 'NOVO', 
+        Busca um usuário (de qualquer tipo) pelo CPF que esteja com status 'NOVO', 
         pronto para o primeiro acesso.
         """
-        return db.query(model.Aluno).filter(
-            model.Aluno.cpf == cpf,
-            model.Aluno.status == model.StatusContaEnum.NOVO
+        return db.query(model.Usuario).filter(
+            model.Usuario.cpf == cpf,
+            model.Usuario.status == model.StatusContaEnum.NOVO
         ).first()
 
-    def ativar_conta_aluno(self, db: Session, aluno_db: model.Aluno, dados_ativacao: schema.PrimeiroAcessoSchema) -> model.Aluno:
+    def ativar_conta(self, db: Session, usuario_db: model.Usuario, dados_ativacao: schema.PrimeiroAcessoSchema) -> model.Usuario:
         """
-        Ativa a conta de um aluno, atualizando email, senha e status.
+        Ativa a conta de um usuário (qualquer tipo), atualizando email, senha e status.
         """
         hashed_password = get_password_hash(dados_ativacao.senha)
         
-        aluno_db.email = dados_ativacao.email
-        aluno_db.senha_hash = hashed_password
-        aluno_db.status = model.StatusContaEnum.ATIVO
+        usuario_db.email = dados_ativacao.email
+        usuario_db.senha_hash = hashed_password
+        usuario_db.status = model.StatusContaEnum.ATIVO
         
         db.commit()
-        db.refresh(aluno_db)
-        return aluno_db
+        db.refresh(usuario_db)
+        return usuario_db

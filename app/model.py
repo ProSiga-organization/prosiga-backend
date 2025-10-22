@@ -15,7 +15,7 @@ class StatusAprovacaoEnum(str, enum.Enum):
     APROVADO = "APROVADO"
     REPROVADO = "REPROVADO"
     TRANCADO = "TRANCADO"
-    EM_CURSO = "CURSANDO"
+    CURSANDO = "CURSANDO"
 
 class Usuario(Base):
     __tablename__ = "usuarios"
