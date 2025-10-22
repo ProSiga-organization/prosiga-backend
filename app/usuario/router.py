@@ -78,3 +78,34 @@ def upload_usuarios_csv(db: Session = Depends(get_db), file: UploadFile = File(.
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao processar o ficheiro: {e}")
+    
+@router.patch("/{cpf}/desativar", 
+             response_model=schema.AnyUsuarioResponse,
+             summary="Desativa a conta de um usuário pelo CPF")
+def desativar_usuario(
+    cpf: str,
+    db: Session = Depends(get_db),
+    # Esta dependência garante que apenas um Coordenador pode executar
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)
+):
+    """
+    (Coordenador) Desativa a conta de um usuário (Aluno, Professor ou outro Coordenador). 
+    Um usuário desativado não poderá mais fazer login no serviço de autenticação.
+    """
+    # 1. Encontra o usuário que será desativado
+    usuario_db = repo.get_by_cpf(db, cpf=cpf)
+    if not usuario_db:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado com este CPF.")
+    
+    # 2. Regra de negócio: Um coordenador não pode desativar a si mesmo.
+    if usuario_db.cpf == current_coordenador.cpf:
+        raise HTTPException(status_code=400, detail="Não é permitido desativar a própria conta.")
+    
+    # 3. Chama o novo método do repositório para alterar o status
+    usuario_desativado = repo.set_usuario_status(
+        db, 
+        usuario_db=usuario_db, 
+        novo_status=model.StatusContaEnum.INATIVO
+    )
+    
+    return usuario_desativado

@@ -44,3 +44,12 @@ class UsuarioRepository:
         Busca um aluno específico pelo número de matrícula.
         """
         return db.query(model.Aluno).filter(model.Aluno.matricula == str(matricula)).first()
+    
+    def set_usuario_status(self, db: Session, usuario_db: model.Usuario, novo_status: model.StatusContaEnum) -> model.Usuario:
+        """
+        Altera o status de um usuário (ATIVO, INATIVO).
+        """
+        usuario_db.status = novo_status
+        db.commit()
+        db.refresh(usuario_db)
+        return usuario_db
