@@ -38,3 +38,9 @@ class UsuarioRepository:
         db.commit()
         db.refresh(usuario_db)
         return usuario_db
+    
+    def get_aluno_by_matricula(self, db: Session, matricula: str) -> model.Aluno | None:
+        """
+        Busca um aluno específico pelo número de matrícula.
+        """
+        return db.query(model.Aluno).filter(model.Aluno.matricula == str(matricula)).first()

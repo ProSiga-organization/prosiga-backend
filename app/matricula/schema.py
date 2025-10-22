@@ -15,7 +15,7 @@ class NotaAvaliacaoResponse(NotaAvaliacaoBase):
 
 class NotaAvaliacaoCreateUpdate(NotaAvaliacaoBase):
     """Schema para o professor lançar/atualizar a nota de um aluno em uma avaliação"""
-    id_matricula_aluno: int
+    matricula_aluno: str
     id_avaliacao_turma: int
 
 class MatriculaCreate(BaseModel):

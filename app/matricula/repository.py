@@ -70,33 +70,33 @@ class MatriculaRepository:
             model.NotaAvaliacao.id_avaliacao_turma == id_avaliacao_turma
         ).first()
 
-    def create_or_update_nota(self, db: Session, request: matricula_schema.NotaAvaliacaoCreateUpdate) -> model.NotaAvaliacao:
+    def create_or_update_nota(self, db: Session, 
+                              nota: float | None, 
+                              id_aluno: int, 
+                              id_avaliacao_turma: int,
+                              id_turma: int
+                              ) -> model.NotaAvaliacao:
         """
         Cria ou atualiza a nota de um aluno em uma avaliação (a "célula").
-        Este é o endpoint principal para o professor lançar notas.
+        Recebe IDs puros validados pelo router.
         """
         # Tenta encontrar a "célula"
         nota_db = self.get_nota_by_aluno_and_avaliacao(
             db, 
-            id_aluno=request.id_matricula_aluno, 
-            id_avaliacao_turma=request.id_avaliacao_turma
+            id_aluno=id_aluno, 
+            id_avaliacao_turma=id_avaliacao_turma
         )
 
         if nota_db:
             # Se a célula existe, apenas atualiza a nota
-            nota_db.nota = request.nota
+            nota_db.nota = nota
         else:
-            # Se não existe, cria a célula
-            # Precisamos do id_turma, vamos buscar a partir da avaliação
-            avaliacao = db.query(model.AvaliacaoTurma).get(request.id_avaliacao_turma)
-            if not avaliacao:
-                 raise Exception("Avaliação não encontrada") # Será tratado no router
-
+            # Se não existe (cenário raro), cria a célula
             nota_db = model.NotaAvaliacao(
-                nota=request.nota,
-                id_avaliacao_turma=request.id_avaliacao_turma,
-                id_matricula_aluno=request.id_matricula_aluno,
-                id_matricula_turma=avaliacao.id_turma
+                nota=nota,
+                id_avaliacao_turma=id_avaliacao_turma,
+                id_matricula_aluno=id_aluno,
+                id_matricula_turma=id_turma
             )
             db.add(nota_db)
         
