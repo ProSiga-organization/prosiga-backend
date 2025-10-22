@@ -1,3 +1,5 @@
+# prosiga-backend/app/periodo_letivo/router.py
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from . import schema
@@ -16,7 +18,7 @@ repo = PeriodoLetivoRepository()
 @router.post("/", response_model=schema.PeriodoLetivoResponse, status_code=status.HTTP_201_CREATED)
 def create_periodo_letivo(request: schema.PeriodoLetivoCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
     """Cria um novo período letivo."""
-    periodo = repo.save(db, model.PeriodoLetivo(**request.model_dump(), coordenador_id=current_coordenador.id))
+    periodo = repo.save(db, model.PeriodoLetivo(**request.model_dump()))
     return periodo
 
 @router.get("/", response_model=list[schema.PeriodoLetivoResponse])
@@ -37,7 +39,7 @@ def update_periodo_letivo(id: int, request: schema.PeriodoLetivoCreate, db: Sess
     """Atualiza um período letivo existente."""
     if not repo.get_by_id(db, id):
         raise HTTPException(status_code=404, detail="Período letivo não encontrado.")
-    periodo = repo.save(db, model.PeriodoLetivo(id=id, **request.model_dump(), coordenador_id=current_coordenador.id))
+    periodo = repo.save(db, model.PeriodoLetivo(id=id, **request.model_dump()))
     return periodo
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
