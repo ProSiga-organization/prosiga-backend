@@ -1,4 +1,18 @@
 from pydantic import BaseModel
+from typing import List 
+
+class AvaliacaoTurmaBase(BaseModel):
+    nome: str
+
+class AvaliacaoTurmaCreate(AvaliacaoTurmaBase):
+    pass
+
+class AvaliacaoTurmaResponse(AvaliacaoTurmaBase):
+    id: int
+    id_turma: int
+
+    class Config:
+        from_attributes = True
 
 class TurmaBase(BaseModel):
     codigo: str
@@ -14,6 +28,7 @@ class TurmaCreate(TurmaBase):
 
 class TurmaResponse(TurmaBase):
     id: int
+    avaliacoes_definidas: List[AvaliacaoTurmaResponse] = []
 
     class Config:
         from_attributes = True

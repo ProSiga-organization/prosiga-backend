@@ -1,6 +1,6 @@
-
 from sqlalchemy import (
-    Column, Integer, String, Boolean, Enum, Date, Float, ForeignKey
+    Column, Integer, String, Boolean, Enum, Date, Float, ForeignKey, 
+    ForeignKeyConstraint, UniqueConstraint  # Verifique se UniqueConstraint está aqui
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -15,41 +15,30 @@ class StatusAprovacaoEnum(str, enum.Enum):
     APROVADO = "APROVADO"
     REPROVADO = "REPROVADO"
     TRANCADO = "TRANCADO"
-
+    EM_CURSO = "CURSANDO"
 
 class Usuario(Base):
     __tablename__ = "usuarios"
-
     id: int = Column(Integer, primary_key=True, index=True)
     cpf: str = Column(String(11), unique=True, nullable=False, index=True)
     nome: str = Column(String(100), nullable=False)
     email: str = Column(String(100), unique=True, nullable=True, index=True)
     senha_hash: str = Column(String(255), nullable=False)
     status: StatusContaEnum = Column(Enum(StatusContaEnum), default=StatusContaEnum.NOVO)
-    
-    # Coluna para gerir a herança
     tipo_usuario: str = Column(String(50))
-
-    __mapper_args__ = {
-        "polymorphic_on": tipo_usuario,
-        "polymorphic_identity": "usuario",
-    }
-
+    __mapper_args__ = {"polymorphic_on": tipo_usuario, "polymorphic_identity": "usuario"}
 
 class Aluno(Usuario):
     __mapper_args__ = {"polymorphic_identity": "aluno"}
     matricula: str = Column(String(20), unique=True)
-    # Relação com a tabela de Matrículas
     matriculas = relationship("Matricula", back_populates="aluno")
 
 class Professor(Usuario):
     __mapper_args__ = {"polymorphic_identity": "professor"}
-    # Relação com a tabela de Turmas
     turmas = relationship("Turma", back_populates="professor")
 
 class Coordenador(Usuario):
     __mapper_args__ = {"polymorphic_identity": "coordenador"}
-
 
 class Curso(Base):
     __tablename__ = "cursos"
@@ -81,21 +70,59 @@ class Turma(Base):
     horario: str = Column(String(100))
     local: str = Column(String(100))
     
-    # Chaves Estrangeiras e Relações
     id_disciplina: int = Column(Integer, ForeignKey("disciplinas.id"), nullable=False)
     id_professor: int = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     id_periodo_letivo: int = Column(Integer, ForeignKey("periodos_letivos.id"), nullable=False)
 
     professor = relationship("Professor", back_populates="turmas")
-    matriculas = relationship("Matricula", back_populates="turma")
+    matriculas = relationship("Matricula", back_populates="turma", cascade="all, delete-orphan")
+    avaliacoes_definidas = relationship("AvaliacaoTurma", back_populates="turma", cascade="all, delete-orphan")
 
 class Matricula(Base):
     __tablename__ = "matriculas"
     id_aluno: int = Column(Integer, ForeignKey("usuarios.id"), primary_key=True)
     id_turma: int = Column(Integer, ForeignKey("turmas.id"), primary_key=True)
-    nota_final: float = Column(Float)
-    status: StatusAprovacaoEnum = Column(Enum(StatusAprovacaoEnum))
+    
+    nota_final: float = Column(Float, nullable=True) 
+    status: StatusAprovacaoEnum = Column(Enum(StatusAprovacaoEnum), default=StatusAprovacaoEnum.CURSANDO)
 
-    # Relações
     aluno = relationship("Aluno", back_populates="matriculas")
     turma = relationship("Turma", back_populates="matriculas")
+    
+    notas_avaliacoes = relationship("NotaAvaliacao", back_populates="matricula", cascade="all, delete-orphan")
+
+class AvaliacaoTurma(Base):
+    """ (A "COLUNA") Define uma avaliação para a turma (ex: "Prova 1")."""
+    __tablename__ = "avaliacoes_turma"
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    nome: str = Column(String(100), nullable=False) # Ex: "Prova 1", "Trabalho 1"
+    id_turma: int = Column(Integer, ForeignKey("turmas.id"), nullable=False)
+    
+    turma = relationship("Turma", back_populates="avaliacoes_definidas")
+    notas = relationship("NotaAvaliacao", back_populates="avaliacao_turma", cascade="all, delete-orphan")
+
+    __table_args__ = (UniqueConstraint('id_turma', 'nome', name='_turma_nome_uc'),)
+
+
+class NotaAvaliacao(Base):
+    """ (A "CÉLULA") Armazena a nota de um aluno em uma AvaliacaoTurma."""
+    __tablename__ = "notas_avaliacoes"
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    nota: float = Column(Float, nullable=True)
+    id_avaliacao_turma: int = Column(Integer, ForeignKey("avaliacoes_turma.id"), nullable=False)
+    id_matricula_aluno: int = Column(Integer, nullable=False)
+    id_matricula_turma: int = Column(Integer, nullable=False)
+
+    avaliacao_turma = relationship("AvaliacaoTurma", back_populates="notas")
+    matricula = relationship("Matricula", back_populates="notas_avaliacoes")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['id_matricula_aluno', 'id_matricula_turma'],
+            ['matriculas.id_aluno', 'matriculas.id_turma']
+        ),
+
+        UniqueConstraint('id_avaliacao_turma', 'id_matricula_aluno', name='_aluno_avaliacao_uc'),
+    )

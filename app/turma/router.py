@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from . import schema
+from typing import List
+from . import schema as turma_schema
 from .. import model
 from ..database import get_db
 from .repository import TurmaRepository
 from .. import deps
+from ..matricula.repository import MatriculaRepository
+from ..matricula import schema as matricula_schema
 
 router = APIRouter(
     prefix="/turmas",
@@ -12,29 +15,30 @@ router = APIRouter(
 )
 
 repo = TurmaRepository()
+repo_matricula = MatriculaRepository()
 
-@router.post("/", response_model=schema.TurmaResponse, status_code=status.HTTP_201_CREATED)
-def create_turma(request: schema.TurmaCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
-    # Adicionar validações aqui no futuro (ex: verificar se o professor e a disciplina existem)
-    turma = repo.save(db, model.Turma(**request.model_dump(), coordenador_id=current_coordenador.id))
+@router.post("/", response_model=turma_schema.TurmaResponse, status_code=status.HTTP_201_CREATED)
+def create_turma(request: turma_schema.TurmaCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
+    turma = repo.save(db, model.Turma(**request.model_dump()))
     return turma
 
-@router.get("/", response_model=list[schema.TurmaResponse])
+@router.get("/", response_model=List[turma_schema.TurmaResponse])
 def get_all_turmas(db: Session = Depends(get_db)):
     return repo.get_all(db)
 
-@router.get("/{id}", response_model=schema.TurmaResponse)
+@router.get("/{id}", response_model=turma_schema.TurmaResponse)
 def get_turma_by_id(id: int, db: Session = Depends(get_db)):
     turma = repo.get_by_id(db, id)
     if not turma:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
+    # O schema agora garante que 'avaliacoes_definidas' venha junto
     return turma
 
-@router.put("/{id}", response_model=schema.TurmaResponse)
-def update_turma(id: int, request: schema.TurmaCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
+@router.put("/{id}", response_model=turma_schema.TurmaResponse)
+def update_turma(id: int, request: turma_schema.TurmaCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
     if not repo.get_by_id(db, id):
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
-    turma = repo.save(db, model.Turma(id=id, **request.model_dump(), coordenador_id=current_coordenador.id))
+    turma = repo.save(db, model.Turma(id=id, **request.model_dump()))
     return turma
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -43,13 +47,86 @@ def delete_turma(id: int, db: Session = Depends(get_db), current_coordenador: mo
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
     repo.delete(db, id)
 
-@router.get("/me", response_model=list[schema.TurmaResponse], summary="Lista as turmas do professor logado")
+@router.get("/me", response_model=List[turma_schema.TurmaResponse], summary="Lista as turmas do professor logado")
 def get_my_turmas(
     db: Session = Depends(get_db),
     current_professor: model.Professor = Depends(deps.get_current_professor)
 ):
-
     turmas = repo.get_turmas_by_professor(db, id_professor=current_professor.id)
     if not turmas:
         raise HTTPException(status_code=404, detail="Nenhuma turma encontrada para o professor logado.")
     return turmas
+
+@router.get("/{id_turma}/matriculas", 
+            response_model=List[matricula_schema.MatriculaResponse], 
+            summary="Lista todos os alunos matriculados em uma turma")
+def get_matriculas_for_turma(
+    id_turma: int,
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+    """
+    (Professor) Retorna a lista de alunos (matrículas) em uma turma.
+    O 'MatriculaResponse' agora inclui as 'notas_avaliacoes' (células) de cada aluno.
+    """
+    turma = repo.get_by_id(db, id_turma)
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+    
+    if turma.id_professor != current_professor.id:
+        raise HTTPException(status_code=403, detail="Professor não tem permissão para ver os alunos desta turma.")
+
+    matriculas = repo_matricula.get_matriculas_by_turma(db, id_turma=id_turma)
+    return matriculas
+
+@router.post("/{id_turma}/avaliacoes", 
+             response_model=turma_schema.AvaliacaoTurmaResponse, 
+             status_code=status.HTTP_201_CREATED, 
+             summary="Cria uma nova avaliação (coluna) para a turma")
+def create_avaliacao_coluna(
+    id_turma: int,
+    request: turma_schema.AvaliacaoTurmaCreate,
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+    turma = repo.get_by_id(db, id_turma)
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+    if turma.id_professor != current_professor.id:
+        raise HTTPException(status_code=403, detail="Professor não tem permissão para criar avaliações nesta turma.")
+    
+    # Lógica do repositório cria a "coluna" e as "células" vazias
+    return repo.create_avaliacao_turma(db, request=request, id_turma=id_turma)
+
+@router.put("/avaliacoes/{id_avaliacao}", 
+            response_model=turma_schema.AvaliacaoTurmaResponse, 
+            summary="Atualiza o nome de uma avaliação (coluna)")
+def update_avaliacao_coluna(
+    id_avaliacao: int,
+    request: turma_schema.AvaliacaoTurmaBase,
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+    avaliacao_db = repo.get_avaliacao_turma_by_id(db, id_avaliacao)
+    if not avaliacao_db:
+        raise HTTPException(status_code=404, detail="Avaliação não encontrada.")
+    if avaliacao_db.turma.id_professor != current_professor.id:
+        raise HTTPException(status_code=403, detail="Professor não tem permissão para editar esta avaliação.")
+
+    return repo.update_avaliacao_turma(db, avaliacao_db=avaliacao_db, request=request)
+
+@router.delete("/avaliacoes/{id_avaliacao}", 
+               status_code=status.HTTP_204_NO_CONTENT, 
+               summary="Deleta uma avaliação (coluna) e todas as suas notas")
+def delete_avaliacao_coluna(
+    id_avaliacao: int,
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+    avaliacao_db = repo.get_avaliacao_turma_by_id(db, id_avaliacao)
+    if not avaliacao_db:
+        raise HTTPException(status_code=404, detail="Avaliação não encontrada.")
+    if avaliacao_db.turma.id_professor != current_professor.id:
+        raise HTTPException(status_code=403, detail="Professor não tem permissão para deletar esta avaliação.")
+
+    repo.delete_avaliacao_turma(db, avaliacao_db=avaliacao_db)
