@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from . import schema as turma_schema
@@ -25,9 +25,85 @@ def create_turma(request: turma_schema.TurmaCreate, db: Session = Depends(get_db
     turma = repo.save(db, model.Turma(**request.model_dump()))
     return turma
 
-@router.get("/", response_model=List[turma_schema.TurmaResponse])
-def get_all_turmas(db: Session = Depends(get_db)):
-    return repo.get_all(db)
+@router.get("/", 
+            response_model=List[turma_schema.TurmaBuscaAlunoResponse],
+            summary="Filtra todas as turmas disponíveis (Visão do Aluno)")
+def get_all_turmas(
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno),
+    id_periodo_letivo: int | None = Query(None, description="Filtrar por ID do período letivo"),
+    semestre_ideal: int | None = Query(None, description="Filtrar por semestre ideal da disciplina"),
+    codigo_disciplina: str | None = Query(None, description="Buscar pelo código da disciplina (ex: 'MAT101')")
+):
+    """
+    (Aluno) Retorna uma lista de turmas disponíveis, permitindo filtros combinados.
+    - **id_periodo_letivo:** (Obrigatório no frontend) Filtra turmas do período atual.
+    - **semestre_ideal:** Filtra disciplinas do semestre (ex: 1º, 2º).
+    - **codigo_disciplina:** Busca por código da disciplina (parcial ou completo).
+    """
+    
+    # 1. Busca as turmas usando o repositório dinâmico
+    turmas_encontradas = repo.get_all(
+        db, 
+        id_periodo_letivo=id_periodo_letivo, 
+        semestre_ideal=semestre_ideal, 
+        codigo_disciplina=codigo_disciplina
+    )
+
+    # 2. Otimização: Preparar o status das disciplinas do aluno
+    #    (Exatamente a mesma lógica que usamos antes)
+    matriculas_aluno = repo_matricula.get_matriculas_by_aluno(db, id_aluno=current_aluno.id)
+    turmas_aluno_ids = [m.id_turma for m in matriculas_aluno]
+    
+    # Mapeia id_turma -> id_disciplina
+    turmas_cursadas_map = {
+        t.id: t.id_disciplina 
+        for t in db.query(model.Turma).filter(model.Turma.id.in_(turmas_aluno_ids)).all()
+    }
+    
+    # Mapeia id_disciplina -> status (APROVADO, CURSANDO, TRANCADO)
+    disciplina_status_map = {}
+    for m in matriculas_aluno:
+        id_disciplina = turmas_cursadas_map.get(m.id_turma)
+        if not id_disciplina:
+            continue
+
+        if m.status == model.StatusAprovacaoEnum.APROVADO:
+            disciplina_status_map[id_disciplina] = turma_schema.StatusTurmaAluno.JA_CONCLUIDO
+        elif m.status == model.StatusAprovacaoEnum.EM_CURSO and id_disciplina not in disciplina_status_map:
+             disciplina_status_map[id_disciplina] = turma_schema.StatusTurmaAluno.CURSANDO
+        elif m.status == model.StatusAprovacaoEnum.TRANCADO and id_disciplina not in disciplina_status_map:
+             disciplina_status_map[id_disciplina] = turma_schema.StatusTurmaAluno.TRANCADO
+
+
+    # 3. Montar a lista de resposta
+    lista_resposta = []
+    for turma in turmas_encontradas:
+        # (Os filtros já foram aplicados pelo repositório)
+
+        # Calcula vagas (rápido, 'matriculas' foi pré-carregado)
+        vagas_disponiveis = turma.vagas - len(turma.matriculas)
+
+        # Determina o status
+        status_aluno = disciplina_status_map.get(
+            turma.id_disciplina, 
+            turma_schema.StatusTurmaAluno.A_FAZER
+        )
+
+        lista_resposta.append(turma_schema.TurmaBuscaAlunoResponse(
+            id_turma=turma.id,
+            codigo_turma=turma.codigo,
+            vagas_disponiveis=max(0, vagas_disponiveis),
+            horario=turma.horario,
+            local=turma.local,
+            codigo_disciplina=turma.disciplina.codigo,
+            nome_disciplina=turma.disciplina.nome,
+            descricao=turma.disciplina.descricao,
+            semestre_ideal=turma.disciplina.semestre_ideal,
+            status_aluno=status_aluno
+        ))
+
+    return lista_resposta
 
 @router.get("/{id}", response_model=turma_schema.TurmaResponse)
 def get_turma_by_id(id: int, db: Session = Depends(get_db)):
@@ -80,79 +156,6 @@ def get_matriculas_for_turma(
 
     matriculas = repo_matricula.get_matriculas_by_turma(db, id_turma=id_turma)
     return matriculas
-
-@router.get("/buscar-por-disciplina/{codigo_disciplina}", 
-            response_model=List[turma_schema.TurmaBuscaAlunoResponse], # <- MUDANÇA: Agora é uma Lista
-            summary="Busca turmas pelo código da DISCIPLINA (Visão do Aluno)")
-def buscar_turmas_por_disciplina(
-    codigo_disciplina: str,
-    db: Session = Depends(get_db),
-    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
-):
-    """
-    (Aluno) Busca todas as turmas disponíveis para uma disciplina (ex: "COMP101")
-    no período letivo atual.
-    """
-    # 1. Busca todas as turmas daquela disciplina (já com matrículas e disciplina carregadas)
-    turmas_encontradas = repo.get_turmas_by_disciplina_codigo(db, codigo_disciplina=codigo_disciplina)
-    if not turmas_encontradas:
-        raise HTTPException(status_code=404, detail="Nenhuma turma encontrada para esta disciplina.")
-
-    # 2. Busca o período letivo atual
-    periodo_atual = repo_periodo.get_current(db)
-    if not periodo_atual:
-        raise HTTPException(status_code=400, detail="Período letivo não está configurado.")
-
-    # 3. Determina o status do aluno em relação a esta DISCIPLINA (uma única vez)
-    #    (Pega o ID da disciplina da primeira turma encontrada, já que é o mesmo para todas)
-    id_disciplina_buscada = turmas_encontradas[0].id_disciplina
-    status_base_disciplina = turma_schema.StatusTurmaAluno.A_FAZER
-    
-    # Busca o histórico de matrículas do aluno
-    matriculas_aluno = repo_matricula.get_matriculas_by_aluno(db, id_aluno=current_aluno.id)
-    
-    # Otimização: Carrega as turmas das matrículas do aluno para checar o ID da disciplina
-    turmas_aluno_ids = [m.id_turma for m in matriculas_aluno]
-    turmas_cursadas_map = {
-        t.id: t.id_disciplina 
-        for t in db.query(model.Turma).filter(model.Turma.id.in_(turmas_aluno_ids)).all()
-    }
-
-    for m in matriculas_aluno:
-        id_disciplina_da_matricula = turmas_cursadas_map.get(m.id_turma)
-        if id_disciplina_da_matricula == id_disciplina_buscada:
-            if m.status == model.StatusAprovacaoEnum.APROVADO:
-                status_base_disciplina = turma_schema.StatusTurmaAluno.JA_CONCLUIDO
-                break # Status final
-            elif m.status == model.StatusAprovacaoEnum.TRANCADO:
-                status_base_disciplina = turma_schema.StatusTurmaAluno.TRANCADO
-            elif m.status == model.StatusAprovacaoEnum.EM_CURSO:
-                status_base_disciplina = turma_schema.StatusTurmaAluno.CURSANDO
-
-    # 4. Monta a lista de resposta
-    lista_resposta = []
-    for turma in turmas_encontradas:
-        # Filtra apenas turmas do período letivo atual
-        if turma.id_periodo_letivo != periodo_atual.id:
-            continue
-            
-        # Calcula vagas (agora é rápido, os dados de 'matriculas' foram pré-carregados)
-        vagas_disponiveis = turma.vagas - len(turma.matriculas)
-
-        lista_resposta.append(turma_schema.TurmaBuscaAlunoResponse(
-            id_turma=turma.id,
-            codigo_turma=turma.codigo,
-            vagas_disponiveis=max(0, vagas_disponiveis),
-            horario=turma.horario,
-            local=turma.local,
-            codigo_disciplina=turma.disciplina.codigo,
-            nome_disciplina=turma.disciplina.nome,
-            descricao=turma.disciplina.descricao,
-            semestre_ideal=turma.disciplina.semestre_ideal,
-            status_aluno=status_base_disciplina
-        ))
-
-    return lista_resposta
 
 @router.post("/{id_turma}/avaliacoes", 
              response_model=turma_schema.AvaliacaoTurmaResponse, 

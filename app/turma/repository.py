@@ -5,8 +5,36 @@ from ..model import Disciplina
 
 class TurmaRepository:
 
-    def get_all(self, db: Session) -> list[model.Turma]:
-        return db.query(model.Turma).all()
+    def get_all(self, db: Session, 
+                id_periodo_letivo: int | None = None,
+                semestre_ideal: int | None = None,
+                codigo_disciplina: str | None = None
+                ) -> list[model.Turma]:
+        """
+        Busca todas as turmas com filtros dinâmicos.
+        Otimizado para carregar disciplinas e matrículas.
+        """
+        # Começa a query com o JOIN obrigatório em Disciplina
+        query = db.query(model.Turma).join(model.Disciplina)
+
+        # Adiciona filtros condicionalmente
+        if id_periodo_letivo:
+            query = query.filter(model.Turma.id_periodo_letivo == id_periodo_letivo)
+        
+        if semestre_ideal:
+            query = query.filter(model.Disciplina.semestre_ideal == semestre_ideal)
+        
+        if codigo_disciplina:
+            # 'ilike' para busca parcial (ex: "COMP" encontra "COMP101")
+            query = query.filter(model.Disciplina.codigo.ilike(f"%{codigo_disciplina}%"))
+
+        # Adiciona otimizações para carregar dados relacionados
+        query = query.options(
+            joinedload(model.Turma.disciplina),   # Carrega a disciplina (JOIN)
+            selectinload(model.Turma.matriculas)  # Carrega as matrículas (SELECT IN)
+        )
+        
+        return query.all()
 
     def get_by_id(self, db: Session, id: int) -> model.Turma | None:
         return db.query(model.Turma).filter(model.Turma.id == id).first()
@@ -24,18 +52,6 @@ class TurmaRepository:
         if turma:
             db.delete(turma)
             db.commit()
-    
-    def get_turmas_by_disciplina_codigo(self, db: Session, codigo_disciplina: str) -> list[model.Turma]:
-        """
-        Busca TODAS as turmas de uma disciplina pelo código da disciplina,
-        já carregando a disciplina e as matrículas de cada turma.
-        """
-        return db.query(model.Turma).join(model.Disciplina).filter(
-            model.Disciplina.codigo == codigo_disciplina
-        ).options(
-            joinedload(model.Turma.disciplina), 
-            selectinload(model.Turma.matriculas)
-        ).all()
     
     def get_turmas_by_professor(self, db: Session, id_professor: int) -> list[model.Turma]:
         """Retorna todas as turmas de um professor específico."""
