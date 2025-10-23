@@ -1,10 +1,12 @@
 import io
 from .. import model
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch, cm
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph
 
 MARGEM_ESQUERDA = 1.5 * cm
 MARGEM_SUPERIOR = 2 * cm
@@ -47,13 +49,13 @@ def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula]) -
     ])
     
     total_aprovado = 0
-    for m in sorted(matriculas, key=lambda x: x.turma.disciplina.semestre_ideal if (x.turma and x.turma.disciplina) else 99):
-        
-        if not m.turma or not m.turma.disciplina:
-            continue 
+    matriculas_ordenadas = sorted(
+        [m for m in matriculas if m.turma and m.turma.disciplina],
+        key=lambda m: m.turma.disciplina.semestre_ideal or 99
+    )
 
+    for m in matriculas_ordenadas:
         disciplina = m.turma.disciplina
-        
         status = m.status.value if m.status else "N/A"
         nota = str(m.nota_final) if m.nota_final is not None else "--"
         
@@ -94,6 +96,86 @@ def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula]) -
 
     c.setFont("Helvetica-Bold", 10)
     c.drawString(MARGEM_ESQUERDA, y_atual, f"Total de Disciplinas Aprovadas: {total_aprovado}")
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
+def gerar_diario_classe_pdf(turma: model.Turma, matriculas: list[model.Matricula]) -> io.BytesIO:
+    """
+    Gera o Diário de Classe (lista de alunos e notas) em PDF.
+    """
+    buffer = io.BytesIO()
+    avaliacoes_colunas = sorted(turma.avaliacoes_definidas, key=lambda x: x.id)
+    header = ["Matricula", "Aluno", "Status", "Nota Final"]
+    header.extend([Paragraph(av.nome, getSampleStyleSheet()['BodyText']) for av in avaliacoes_colunas]) # Permite quebra de linha
+
+
+    col_widths = [2.5 * cm, 6 * cm, 2.5 * cm, 2 * cm]
+    if avaliacoes_colunas:
+        largura_avaliacao = max(2*cm, (13.5 * cm) / len(avaliacoes_colunas))
+        col_widths.extend([largura_avaliacao] * len(avaliacoes_colunas))
+    largura_tabela = sum(col_widths)
+    if largura_tabela > 18 * cm:
+        page_size = landscape(A4)
+        page_width, page_height = page_size
+    else:
+        page_size = A4
+        page_width, page_height = page_size
+        
+    c = canvas.Canvas(buffer, pagesize=page_size)
+
+    y_atual = page_height - MARGEM_SUPERIOR
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(MARGEM_ESQUERDA, y_atual, "Diário de Classe")
+    
+    y_atual -= 0.7 * cm
+    c.setFont("Helvetica", 12)
+    c.drawString(MARGEM_ESQUERDA, y_atual, f"Turma: {turma.codigo} - {turma.disciplina.nome}")
+    y_atual -= 0.5 * cm
+    c.drawString(MARGEM_ESQUERDA, y_atual, f"Professor(a): {turma.professor.nome}")
+
+    y_atual -= 1 * cm # 
+    dados_tabela = [header]
+    for matricula in matriculas:
+        if not matricula.aluno:
+            continue
+            
+        notas_map = {
+            nota.id_avaliacao_turma: nota.nota 
+            for nota in matricula.notas_avaliacoes
+        }
+        
+        row = [
+            matricula.aluno.matricula,
+            Paragraph(matricula.aluno.nome, getSampleStyleSheet()['BodyText']), # Permite quebra de linha
+            matricula.status.value if matricula.status else "EM_CURSO",
+            str(matricula.nota_final) if matricula.nota_final is not None else "--"
+        ]
+        
+        for av in avaliacoes_colunas:
+            nota = notas_map.get(av.id)
+            row.append(str(nota) if nota is not None else "--")
+            
+        dados_tabela.append(row)
+
+    tabela = Table(dados_tabela, colWidths=col_widths)
+    estilo = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.darkblue),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 9),
+        ('BOTTOMPADDING', (0,0), (-1,0), 10),
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('FONTSIZE', (0,1), (-1,-1), 8),
+    ])
+    tabela.setStyle(estilo)
+
+    tabela.wrapOn(c, page_width - (2 * MARGEM_ESQUERDA), y_atual)
+    tabela.drawOn(c, MARGEM_ESQUERDA, y_atual - tabela._height)
     c.showPage()
     c.save()
     buffer.seek(0)

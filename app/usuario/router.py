@@ -1,12 +1,15 @@
 import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
-from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse 
+from sqlalchemy.orm import Session, joinedload 
 from . import schema
 from .. import model
 from ..database import get_db
 from .repository import UsuarioRepository
 from .. import deps
+from ..matricula.repository import MatriculaRepository
+from ..relatorios import gerador_pdf
 
 router = APIRouter(
     prefix="/usuarios",
@@ -14,9 +17,11 @@ router = APIRouter(
 )
 
 repo = UsuarioRepository()
+repo_matricula = MatriculaRepository()
 
+# --- ENDPOINT DE PRIMEIRO ACESSO ---
 @router.post("/primeiro-acesso", 
-             response_model=schema.AnyUsuarioResponse,
+             response_model=schema.AnyUsuarioResponse, 
              summary="Realiza o primeiro acesso de qualquer usuário (Aluno, Professor, Coordenador)")
 def primeiro_acesso_usuario(dados_ativacao: schema.PrimeiroAcessoSchema, db: Session = Depends(get_db)):
     
@@ -32,6 +37,7 @@ def primeiro_acesso_usuario(dados_ativacao: schema.PrimeiroAcessoSchema, db: Ses
     
     return usuario_ativado
 
+# --- ENDPOINT PARA OBTER DADOS DO USUÁRIO LOGADO ---
 @router.get("/me", response_model=schema.AnyUsuarioResponse, summary="Obtém os dados do usuário logado")
 def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
     """
@@ -39,6 +45,7 @@ def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
     """
     return current_user
 
+# --- ENDPOINT PARA UPLOAD DE CSV ---
 @router.post("/upload-csv", 
              summary="Pré-cadastra novos usuários a partir de um ficheiro CSV",
              status_code=status.HTTP_201_CREATED)
@@ -79,29 +86,23 @@ def upload_usuarios_csv(db: Session = Depends(get_db), file: UploadFile = File(.
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao processar o ficheiro: {e}")
     
+# --- ENDPOINT PARA DESATIVAR CONTA (ADMIN/COORDENADOR) ---
 @router.patch("/{cpf}/desativar", 
              response_model=schema.AnyUsuarioResponse,
              summary="Desativa a conta de um usuário pelo CPF")
 def desativar_usuario(
     cpf: str,
     db: Session = Depends(get_db),
-    # Esta dependência garante que apenas um Coordenador pode executar
     current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)
 ):
-    """
-    (Coordenador) Desativa a conta de um usuário (Aluno, Professor ou outro Coordenador). 
-    Um usuário desativado não poderá mais fazer login no serviço de autenticação.
-    """
-    # 1. Encontra o usuário que será desativado
+    # ... (código do endpoint de desativar, sem alterações) ...
     usuario_db = repo.get_by_cpf(db, cpf=cpf)
     if not usuario_db:
         raise HTTPException(status_code=404, detail="Usuário não encontrado com este CPF.")
     
-    # 2. Regra de negócio: Um coordenador não pode desativar a si mesmo.
     if usuario_db.cpf == current_coordenador.cpf:
         raise HTTPException(status_code=400, detail="Não é permitido desativar a própria conta.")
     
-    # 3. Chama o novo método do repositório para alterar o status
     usuario_desativado = repo.set_usuario_status(
         db, 
         usuario_db=usuario_db, 
@@ -109,3 +110,35 @@ def desativar_usuario(
     )
     
     return usuario_desativado
+
+# --- Exportar Histórico PDF ---
+@router.get("/me/historico-pdf",
+            summary="Gera o histórico acadêmico do aluno logado em PDF")
+def get_historico_pdf(
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
+):
+    """
+    (Aluno) Gera e retorna um ficheiro PDF com o histórico acadêmico completo
+    do aluno autenticado.
+    """
+    matriculas = db.query(model.Matricula).options(
+        joinedload(model.Matricula.turma).joinedload(model.Turma.disciplina)
+    ).filter(
+        model.Matricula.id_aluno == current_aluno.id
+    ).all()
+
+    try:
+        pdf_buffer = gerador_pdf.gerar_historico_pdf(
+            aluno=current_aluno,
+            matriculas=matriculas
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
+
+    filename = f"historico_{current_aluno.matricula}.pdf"
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}"
+    }
+
+    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)

@@ -13,6 +13,7 @@ from ..periodo_letivo.repository import PeriodoLetivoRepository
 from fastapi.responses import StreamingResponse
 import io
 import csv
+from ..relatorios import gerador_pdf
 
 router = APIRouter(
     prefix="/turmas",
@@ -321,3 +322,51 @@ def exportar_notas_csv(
     }
     
     return StreamingResponse(output, media_type="text/csv", headers=headers)
+
+@router.get("/{id_turma}/diario-pdf",
+            summary="Gera o diário de classe da turma em formato PDF")
+def exportar_diario_pdf(
+    id_turma: int,
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+    """
+    (Professor) Gera e retorna um ficheiro PDF com o diário de classe 
+    (alunos e notas) da turma.
+    """
+    
+    turma = db.query(model.Turma).options(
+        joinedload(model.Turma.avaliacoes_definidas), 
+        joinedload(model.Turma.disciplina),          
+        joinedload(model.Turma.professor)            
+    ).filter(model.Turma.id == id_turma).first()
+
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+
+    if turma.id_professor != current_professor.id:
+        raise HTTPException(status_code=403, detail="Acesso negado: Você não é o professor desta turma.")
+
+    matriculas = db.query(model.Matricula).options(
+        joinedload(model.Matricula.aluno), 
+        joinedload(model.Matricula.notas_avaliacoes)
+    ).filter(
+        model.Matricula.id_turma == id_turma
+    ).order_by(
+        model.Matricula.aluno.has(model.Usuario.nome) 
+    ).all()
+
+    try:
+        pdf_buffer = gerador_pdf.gerar_diario_classe_pdf(
+            turma=turma,
+            matriculas=matriculas
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF do diário: {e}")
+
+    filename = f"diario_classe_{turma.codigo}.pdf"
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}"
+    }
+
+    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
