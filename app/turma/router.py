@@ -352,9 +352,7 @@ def exportar_diario_pdf(
         joinedload(model.Matricula.notas_avaliacoes)
     ).filter(
         model.Matricula.id_turma == id_turma
-    ).order_by(
-        model.Matricula.aluno.has(model.Usuario.nome) 
-    ).all()
+    ).join(model.Aluno, model.Matricula.id_aluno == model.Aluno.id).order_by(model.Aluno.nome).all()
 
     try:
         pdf_buffer = gerador_pdf.gerar_diario_classe_pdf(
