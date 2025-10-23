@@ -49,7 +49,11 @@ def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
 @router.post("/upload-csv",
              summary="Pré-cadastra novos usuários a partir de um ficheiro CSV",
              status_code=status.HTTP_201_CREATED)
-def upload_usuarios_csv(db: Session = Depends(get_db), file: UploadFile = File(...)):
+def upload_usuarios_csv(
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)
+):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="O ficheiro tem de ser um CSV.")
 
