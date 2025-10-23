@@ -33,26 +33,16 @@ def seed_data():
         if db.query(Disciplina).count() == 0:
             print("Populando a tabela de Disciplinas...")
             disciplinas_para_adicionar = [
-                Disciplina(codigo="COMP101", nome="Introdução à Programação", eh_obrigatoria=True),
-                Disciplina(codigo="COMP102", nome="Estrutura de Dados I", eh_obrigatoria=True),
-                Disciplina(codigo="COMP201", nome="Algoritmos Avançados", eh_obrigatoria=True),
-                Disciplina(codigo="COMP202", nome="Teoria da Computação", eh_obrigatoria=True),
-                Disciplina(codigo="SOFT101", nome="Engenharia de Requisitos", eh_obrigatoria=True),
-                Disciplina(codigo="SOFT201", nome="Qualidade de Software", eh_obrigatoria=True),
-                Disciplina(codigo="SOFT301", nome="Arquitetura de Software", eh_obrigatoria=True),
-                Disciplina(codigo="MAT101", nome="Cálculo I", eh_obrigatoria=True),
-                Disciplina(codigo="MAT102", nome="Álgebra Linear", eh_obrigatoria=True),
-                Disciplina(codigo="FIS101", nome="Física I", eh_obrigatoria=True),
-                Disciplina(codigo="HUM101", nome="Comunicação e Expressão", eh_obrigatoria=False),
-                Disciplina(codigo="ADM101", nome="Gestão de Projetos", eh_obrigatoria=False),
-                Disciplina(codigo="REDES101", nome="Redes de Computadores", eh_obrigatoria=True),
-                Disciplina(codigo="SO101", nome="Sistemas Operacionais", eh_obrigatoria=True),
-                Disciplina(codigo="BD101", nome="Banco de Dados I", eh_obrigatoria=True),
-                Disciplina(codigo="IA101", nome="Inteligência Artificial", eh_obrigatoria=False),
-                Disciplina(codigo="SEG101", nome="Segurança da Informação", eh_obrigatoria=False),
-                Disciplina(codigo="WEB101", nome="Desenvolvimento Web", eh_obrigatoria=True),
-                Disciplina(codigo="MOB101", nome="Desenvolvimento Mobile", eh_obrigatoria=False),
-                Disciplina(codigo="UX101", nome="Design de Experiência do Usuário", eh_obrigatoria=False),
+                Disciplina(codigo="COMP101", nome="Introdução à Programação", eh_obrigatoria=True, semestre_ideal=1, descricao="Conceitos básicos de programação..."),
+                Disciplina(codigo="COMP102", nome="Estrutura de Dados I", eh_obrigatoria=True, semestre_ideal=2, descricao="Pilhas, filas, listas..."),
+                Disciplina(codigo="COMP201", nome="Algoritmos Avançados", eh_obrigatoria=True, semestre_ideal=3, descricao="Grafos, algoritmos gulosos..."),
+                Disciplina(codigo="COMP202", nome="Teoria da Computação", eh_obrigatoria=True, semestre_ideal=4, descricao="Autômatos finitos..."),
+                Disciplina(codigo="SOFT101", nome="Engenharia de Requisitos", eh_obrigatoria=True, semestre_ideal=2, descricao="Técnicas de elicitação..."),
+                Disciplina(codigo="SOFT201", nome="Qualidade de Software", eh_obrigatoria=True, semestre_ideal=3, descricao="Testes de software..."),
+                Disciplina(codigo="SOFT301", nome="Arquitetura de Software", eh_obrigatoria=True, semestre_ideal=4, descricao="Padrões de arquitetura..."),
+                Disciplina(codigo="MAT101", nome="Cálculo I", eh_obrigatoria=True, semestre_ideal=1, descricao="Limites, derivadas, integrais..."),
+                Disciplina(codigo="MAT102", nome="Álgebra Linear", eh_obrigatoria=True, semestre_ideal=2, descricao="Vetores, matrizes..."),
+                Disciplina(codigo="FIS101", nome="Física I", eh_obrigatoria=True, semestre_ideal=1, descricao="Mecânica clássica..."),
             ]
             db.add_all(disciplinas_para_adicionar)
             db.commit()

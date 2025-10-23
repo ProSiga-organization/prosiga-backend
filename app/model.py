@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Boolean, Enum, Date, Float, ForeignKey, 
-    ForeignKeyConstraint, UniqueConstraint  # Verifique se UniqueConstraint está aqui
+    ForeignKeyConstraint, UniqueConstraint, Text
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -52,6 +52,8 @@ class Disciplina(Base):
     codigo: str = Column(String(20), unique=True, nullable=False)
     nome: str = Column(String(100), nullable=False)
     eh_obrigatoria: bool = Column(Boolean, default=True)
+    descricao: str = Column(Text, nullable=True) 
+    semestre_ideal: int = Column(Integer, nullable=True)
 
 class PeriodoLetivo(Base):
     __tablename__ = "periodos_letivos"
