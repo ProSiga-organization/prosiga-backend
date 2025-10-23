@@ -142,3 +142,41 @@ def get_historico_pdf(
     }
 
     return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
+
+# --- Relatório de Histórico por Aluno ---
+@router.get("/{matricula}/historico-pdf",
+            summary="Gera o histórico acadêmico de um aluno específico (Visão Admin)")
+def get_historico_aluno_admin(
+    matricula: str,
+    db: Session = Depends(get_db),
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)
+):
+    """
+    (Coordenador) Gera e retorna o PDF do histórico acadêmico de um aluno
+    específico, buscando-o pela matrícula.
+    """
+
+    aluno = repo.get_aluno_by_matricula(db, matricula=matricula)
+    if not aluno:
+        raise HTTPException(status_code=404, detail="Aluno não encontrado com esta matrícula.")
+
+    matriculas = db.query(model.Matricula).options(
+        joinedload(model.Matricula.turma).joinedload(model.Turma.disciplina)
+    ).filter(
+        model.Matricula.id_aluno == aluno.id
+    ).all()
+
+    try:
+        pdf_buffer = gerador_pdf.gerar_historico_pdf(
+            aluno=aluno,
+            matriculas=matriculas
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
+
+    filename = f"historico_{aluno.matricula}.pdf"
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}"
+    }
+
+    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)

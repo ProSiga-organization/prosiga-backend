@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from . import schema 
 from .. import model
 from ..security import get_password_hash
@@ -53,3 +53,12 @@ class UsuarioRepository:
         db.commit()
         db.refresh(usuario_db)
         return usuario_db
+    
+    def get_all_professores(self, db: Session) -> list[model.Professor]:
+        """
+        Retorna uma lista de todos os professores cadastrados.
+        Otimizado para já carregar as turmas de cada professor.
+        """
+        return db.query(model.Professor).options(
+            joinedload(model.Professor.turmas) 
+        ).all()

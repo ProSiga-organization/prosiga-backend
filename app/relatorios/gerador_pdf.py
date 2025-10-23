@@ -4,9 +4,8 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch, cm
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph
 
 MARGEM_ESQUERDA = 1.5 * cm
 MARGEM_SUPERIOR = 2 * cm
@@ -279,5 +278,95 @@ def gerar_relatorio_ocupacao_pdf(periodo: model.PeriodoLetivo, turmas: list[mode
 
     c.showPage()
     c.save()
+    buffer.seek(0)
+    return buffer
+
+def gerar_relatorio_turmas_professor_pdf(periodo: model.PeriodoLetivo, professores: list[model.Professor]) -> io.BytesIO:
+    """
+    Gera o Relatório de Distribuição de Turmas por Professor em PDF.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=MARGEM_ESQUERDA, rightMargin=MARGEM_ESQUERDA,
+                            topMargin=MARGEM_SUPERIOR, bottomMargin=MARGEM_SUPERIOR)
+    
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Relatório de Turmas por Professor", styles['h1']))
+    story.append(Paragraph(f"Período Letivo: {periodo.ano}.{periodo.semestre}", styles['h2']))
+    story.append(Spacer(1, 0.5 * cm))
+
+    dados_tabela = []
+    dados_tabela.append([
+        "Professor(a)", 
+        "Cód. Turma", 
+        "Disciplina",
+        "Alunos Mat."
+    ])
+    
+    total_turmas = 0
+
+    for prof in sorted(professores, key=lambda p: p.nome):
+        turmas_do_periodo = [
+            t for t in prof.turmas 
+            if t.id_periodo_letivo == periodo.id and t.disciplina
+        ]
+        
+        if not turmas_do_periodo:
+            continue
+        turmas_do_periodo.sort(key=lambda t: t.codigo)
+
+        primeira_linha = [
+            Paragraph(prof.nome, styles['BodyText']),
+            turmas_do_periodo[0].codigo,
+            Paragraph(turmas_do_periodo[0].disciplina.nome, styles['BodyText']),
+            len(turmas_do_periodo[0].matriculas)
+        ]
+        dados_tabela.append(primeira_linha)
+        total_turmas += 1
+        for turma in turmas_do_periodo[1:]:
+            dados_tabela.append([
+                "", # Célula vazia (será mesclada)
+                turma.codigo,
+                Paragraph(turma.disciplina.nome, styles['BodyText']),
+                len(turma.matriculas)
+            ])
+            total_turmas += 1
+
+    if len(dados_tabela) <= 1:
+        story.append(Paragraph("Nenhuma turma alocada para professores neste período.", styles['BodyText']))
+    else:
+
+        tabela = Table(dados_tabela, colWidths=[
+            5 * cm, 3 * cm, 7 * cm, 2.5 * cm
+        ])
+
+        estilo = TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.darkred),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('FONTSIZE', (0,1), (-1,-1), 9),
+        ])
+
+        linha_inicio = 1
+        for prof in sorted(professores, key=lambda p: p.nome):
+            turmas_do_periodo = [t for t in prof.turmas if t.id_periodo_letivo == periodo.id]
+            if turmas_do_periodo:
+                num_turmas = len(turmas_do_periodo)
+                if num_turmas > 1:
+                    estilo.add('SPAN', (0, linha_inicio), (0, linha_inicio + num_turmas - 1))
+                linha_inicio += num_turmas
+
+        tabela.setStyle(estilo)
+        story.append(tabela)
+
+    story.append(Spacer(1, 1 * cm))
+    story.append(Paragraph(f"Total de Turmas Alocadas: {total_turmas}", styles['h3']))
+    doc.build(story)
+    
     buffer.seek(0)
     return buffer
