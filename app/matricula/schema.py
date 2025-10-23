@@ -36,3 +36,8 @@ class MatriculaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AdminMatriculaCreate(BaseModel):
+    """Schema para o admin matricular um aluno manualmente."""
+    matricula_aluno: str
+    id_turma: int

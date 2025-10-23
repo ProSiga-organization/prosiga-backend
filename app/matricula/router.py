@@ -104,6 +104,42 @@ def trancar_disciplina(
     # 5. Se tudo estiver OK, executa o trancamento
     return repo.trancar_matricula(db, matricula=matricula_db)
 
+@router.post("/admin/matricular", 
+             response_model=matricula_schema.MatriculaResponse, 
+             status_code=status.HTTP_201_CREATED,
+             summary="Matricula um aluno em uma turma manualmente (Admin)")
+def admin_create_matricula(
+    request: matricula_schema.AdminMatriculaCreate,
+    db: Session = Depends(get_db),
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)
+):
+    """
+    (Coordenador) Matricula manualmente um aluno em uma turma.
+    Este endpoint IGNORA restrições de vagas.
+    """
+    # 1. Validar Aluno (pela matrícula)
+    aluno = repo_usuario.get_aluno_by_matricula(db, matricula=request.matricula_aluno)
+    if not aluno:
+        raise HTTPException(status_code=404, detail="Aluno não encontrado com esta matrícula.")
+
+    # 2. Validar Turma
+    turma = repo_turma.get_by_id(db, id=request.id_turma)
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+
+    # 3. Validar Duplicidade
+    matricula_existente = repo.get_by_aluno_and_turma(db, id_aluno=aluno.id, id_turma=request.id_turma)
+    if matricula_existente:
+        raise HTTPException(status_code=409, detail="Aluno já matriculado nesta turma.")
+
+    # 4. Criar Matrícula (sem checar vagas)
+    dados_matricula = model.Matricula(id_aluno=aluno.id, id_turma=request.id_turma)
+    
+    # O repo.create cuida de criar a matrícula E as "células" de nota vazias
+    nova_matricula = repo.create(db, dados_matricula)
+    
+    return nova_matricula
+
 # --- ENDPOINTS DE MATRÍCULA (PROFESSOR)---
 @router.patch("/{id_turma}/{matricula_aluno}",
               response_model=matricula_schema.MatriculaResponse, 
