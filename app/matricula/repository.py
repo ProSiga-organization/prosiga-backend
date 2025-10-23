@@ -103,3 +103,12 @@ class MatriculaRepository:
         db.commit()
         db.refresh(nota_db)
         return nota_db
+    
+    def trancar_matricula(self, db: Session, matricula: model.Matricula) -> model.Matricula:
+        """
+        Altera o status de uma matrícula para TRANCADO.
+        """
+        matricula.status = model.StatusAprovacaoEnum.TRANCADO
+        db.commit()
+        db.refresh(matricula)
+        return matricula

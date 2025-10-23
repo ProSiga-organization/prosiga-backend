@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List 
@@ -7,6 +8,7 @@ from ..database import get_db
 from .repository import MatriculaRepository
 from ..turma.repository import TurmaRepository
 from ..usuario.repository import UsuarioRepository 
+from ..periodo_letivo.repository import PeriodoLetivoRepository
 from .. import deps
 
 router = APIRouter(
@@ -16,7 +18,8 @@ router = APIRouter(
 
 repo = MatriculaRepository()
 repo_turma = TurmaRepository()
-repo_usuario = UsuarioRepository() 
+repo_usuario = UsuarioRepository()
+repo_periodo = PeriodoLetivoRepository() 
 
 # --- ENDPOINTS DE MATRÍCULA (ALUNO) ---
 @router.post("/", response_model=matricula_schema.MatriculaResponse, status_code=status.HTTP_201_CREATED)
@@ -58,6 +61,48 @@ def get_my_matriculas(
     if not matriculas:
         raise HTTPException(status_code=404, detail="Nenhuma matrícula encontrada.")
     return matriculas
+
+@router.patch("/{id_turma}/trancar", 
+              response_model=matricula_schema.MatriculaResponse,
+              summary="Solicita o trancamento de uma disciplina")
+def trancar_disciplina(
+    id_turma: int,
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
+):
+    """
+    (Aluno) Solicita o trancamento de uma disciplina (matrícula) em que está inscrito.
+    """
+    # 1. Verifica se o aluno está matriculado na turma
+    matricula_db = repo.get_by_aluno_and_turma(db, id_aluno=current_aluno.id, id_turma=id_turma)
+    if not matricula_db:
+        raise HTTPException(status_code=404, detail="Matrícula não encontrada.")
+    
+    # 2. Verifica se a matrícula já não foi trancada ou concluída
+    if matricula_db.status != model.StatusAprovacaoEnum.EM_CURSO:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Não é possível trancar. Status atual: {matricula_db.status.value}"
+        )
+
+    # 3. Busca o período letivo para checar o prazo de trancamento
+    turma = repo_turma.get_by_id(db, id_turma)
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma associada não encontrada.")
+        
+    periodo_letivo = repo_periodo.get_by_id(db, turma.id_periodo_letivo)
+    if not periodo_letivo or not periodo_letivo.fim_trancamento:
+        raise HTTPException(status_code=400, detail="Prazo de trancamento não definido pela administração.")
+
+    # 4. Compara a data de hoje com o prazo
+    if date.today() > periodo_letivo.fim_trancamento:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Prazo para trancamento encerrado em {periodo_letivo.fim_trancamento.strftime('%d/%m/%Y')}"
+        )
+
+    # 5. Se tudo estiver OK, executa o trancamento
+    return repo.trancar_matricula(db, matricula=matricula_db)
 
 # --- ENDPOINTS DE MATRÍCULA (PROFESSOR)---
 @router.patch("/{id_turma}/{matricula_aluno}",
