@@ -108,13 +108,6 @@ def get_all_turmas(
 
     return lista_resposta
 
-@router.get("/{id}", response_model=turma_schema.TurmaResponse)
-def get_turma_by_id(id: int, db: Session = Depends(get_db)):
-    turma = repo.get_by_id(db, id)
-    if not turma:
-        raise HTTPException(status_code=404, detail="Turma não encontrada.")
-    return turma
-
 @router.put("/{id}", response_model=turma_schema.TurmaResponse)
 def update_turma(id: int, request: turma_schema.TurmaCreate, db: Session = Depends(get_db), current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)):
     if not repo.get_by_id(db, id):
@@ -137,6 +130,13 @@ def get_my_turmas(
     if not turmas:
         raise HTTPException(status_code=404, detail="Nenhuma turma encontrada para o professor logado.")
     return turmas
+
+@router.get("/{id}", response_model=turma_schema.TurmaResponse)
+def get_turma_by_id(id: int, db: Session = Depends(get_db)):
+    turma = repo.get_by_id(db, id)
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+    return turma
 
 @router.get("/{id_turma}/matriculas", 
             response_model=List[matricula_schema.MatriculaResponse], 
