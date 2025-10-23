@@ -46,42 +46,79 @@ def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
     return current_user
 
 # --- ENDPOINT PARA UPLOAD DE CSV ---
-@router.post("/upload-csv", 
+@router.post("/upload-csv",
              summary="Pré-cadastra novos usuários a partir de um ficheiro CSV",
              status_code=status.HTTP_201_CREATED)
 def upload_usuarios_csv(db: Session = Depends(get_db), file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="O ficheiro tem de ser um CSV.")
+
+    cursos_map = {curso.codigo: curso.id for curso in db.query(model.Curso).all()}
     try:
         content = file.file.read().decode('utf-8')
         csv_reader = csv.DictReader(io.StringIO(content))
         novos_usuarios = []
-        for row in csv_reader:
+        erros_importacao = [] 
+
+        for row_num, row in enumerate(csv_reader, start=2):
             cpf = row.get('cpf')
-            if not cpf: continue
-            
+            if not cpf:
+                erros_importacao.append(f"Linha {row_num}: CPF em falta.")
+                continue
+
             usuario_existente = repo.get_by_cpf(db, cpf=cpf)
             if usuario_existente:
                 print(f"Usuário com CPF {cpf} já existe. A ignorar.")
                 continue
 
             tipo_usuario = row.get('tipo_usuario')
+            nome = row.get('nome')
+            if not nome:
+                 erros_importacao.append(f"Linha {row_num} (CPF {cpf}): Nome em falta.")
+                 continue
+
+            novo_usuario = None
             if tipo_usuario == 'aluno':
-                novo_usuario = model.Aluno(cpf=cpf, nome=row['nome'], matricula=row['matricula'], senha_hash="", status=model.StatusContaEnum.NOVO)
+                matricula = row.get('matricula')
+                codigo_curso = row.get('codigo_curso')
+                id_curso = None
+                if codigo_curso:
+                    id_curso = cursos_map.get(codigo_curso)
+                    if not id_curso:
+                        erros_importacao.append(f"Linha {row_num} (CPF {cpf}): Código de curso '{codigo_curso}' inválido.")
+                        continue 
+
+                if not matricula:
+                     erros_importacao.append(f"Linha {row_num} (CPF {cpf}): Matrícula em falta para aluno.")
+                     continue
+
+                novo_usuario = model.Aluno(cpf=cpf, nome=nome, matricula=matricula, senha_hash="", status=model.StatusContaEnum.NOVO, id_curso=id_curso)
+
             elif tipo_usuario == 'professor':
-                novo_usuario = model.Professor(cpf=cpf, nome=row['nome'], senha_hash="", status=model.StatusContaEnum.NOVO)
+                novo_usuario = model.Professor(cpf=cpf, nome=nome, senha_hash="", status=model.StatusContaEnum.NOVO)
             elif tipo_usuario == 'coordenador':
-                novo_usuario = model.Coordenador(cpf=cpf, nome=row['nome'], senha_hash="", status=model.StatusContaEnum.NOVO)
+                novo_usuario = model.Coordenador(cpf=cpf, nome=nome, senha_hash="", status=model.StatusContaEnum.NOVO)
             else:
-                continue
+                erros_importacao.append(f"Linha {row_num} (CPF {cpf}): Tipo de usuário '{tipo_usuario}' inválido.")
+                continue 
+
             novos_usuarios.append(novo_usuario)
 
-        if not novos_usuarios:
-            return {"message": "Nenhum novo usuário para adicionar."}
-        
-        db.add_all(novos_usuarios)
-        db.commit()
-        return {"message": f"{len(novos_usuarios)} novos usuários pré-cadastrados com sucesso!"}
+        response_message = ""
+        if novos_usuarios:
+            db.add_all(novos_usuarios)
+            db.commit()
+            response_message += f"{len(novos_usuarios)} novos usuários pré-cadastrados com sucesso! "
+        else:
+             response_message += "Nenhum novo usuário adicionado. "
+
+        if erros_importacao:
+             response_message += f"Erros encontrados: {'; '.join(erros_importacao)}"
+             status_code = status.HTTP_207_MULTI_STATUS if novos_usuarios else status.HTTP_400_BAD_REQUEST
+             raise HTTPException(status_code=status_code, detail=response_message)
+
+        return {"message": response_message}
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao processar o ficheiro: {e}")
