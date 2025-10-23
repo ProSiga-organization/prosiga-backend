@@ -370,3 +370,76 @@ def gerar_relatorio_turmas_professor_pdf(periodo: model.PeriodoLetivo, professor
     
     buffer.seek(0)
     return buffer
+
+def gerar_relatorio_alunos_curso_pdf(cursos: list[model.Curso]) -> io.BytesIO:
+    """
+    Gera o Relatório de Lista de Alunos por Curso em PDF.
+    Espera que a lista de cursos já venha com os alunos pré-carregados.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=MARGEM_ESQUERDA, rightMargin=MARGEM_ESQUERDA,
+                            topMargin=MARGEM_SUPERIOR, bottomMargin=MARGEM_SUPERIOR)
+    
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Relatório de Alunos por Curso", styles['h1']))
+    story.append(Spacer(1, 0.5 * cm))
+    
+    total_geral_alunos = 0
+
+    for curso in sorted(cursos, key=lambda c: c.nome):
+        story.append(Paragraph(f"Curso: {curso.nome} ({curso.codigo})", styles['h2']))
+        story.append(Spacer(1, 0.2 * cm))
+
+        dados_tabela = []
+        dados_tabela.append([
+            "Matrícula", 
+            "Nome do Aluno", 
+            "CPF",
+            "Status da Conta"
+        ])
+
+        alunos_do_curso = sorted(curso.alunos, key=lambda a: a.nome)
+        
+        if not alunos_do_curso:
+             story.append(Paragraph("Nenhum aluno matriculado neste curso.", styles['BodyText']))
+             story.append(Spacer(1, 0.5 * cm))
+             continue
+
+        total_geral_alunos += len(alunos_do_curso)
+
+        for aluno in alunos_do_curso:
+            dados_tabela.append([
+                aluno.matricula,
+                Paragraph(aluno.nome, styles['BodyText']),
+                f"{aluno.cpf[:3]}.***.{aluno.cpf[6:9]}-**", 
+                aluno.status.value
+            ])
+            
+        tabela = Table(dados_tabela, colWidths=[
+            3.5 * cm, 8 * cm, 4 * cm, 3 * cm
+        ])
+
+        estilo = TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.cadetblue),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('FONTSIZE', (0,1), (-1,-1), 9),
+            ('BOTTOMPADDING', (0,0), (-1,0), 10),
+        ])
+        tabela.setStyle(estilo)
+        story.append(tabela)
+        story.append(Spacer(1, 0.5 * cm))
+
+    story.append(Spacer(1, 1 * cm))
+    story.append(Paragraph(f"Total Geral de Alunos Listados: {total_geral_alunos}", styles['h3']))
+
+    doc.build(story)
+    
+    buffer.seek(0)
+    return buffer
