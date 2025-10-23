@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from . import schema as turma_schema
 from ..usuario import schema as usuario_schema
@@ -10,6 +10,9 @@ from .. import deps
 from ..matricula.repository import MatriculaRepository
 from ..matricula import schema as matricula_schema
 from ..periodo_letivo.repository import PeriodoLetivoRepository
+from fastapi.responses import StreamingResponse
+import io
+import csv
 
 router = APIRouter(
     prefix="/turmas",
@@ -51,7 +54,6 @@ def get_all_turmas(
     )
 
     # 2. Otimização: Preparar o status das disciplinas do aluno
-    #    (Exatamente a mesma lógica que usamos antes)
     matriculas_aluno = repo_matricula.get_matriculas_by_aluno(db, id_aluno=current_aluno.id)
     turmas_aluno_ids = [m.id_turma for m in matriculas_aluno]
     
@@ -244,3 +246,78 @@ def get_colegas_turma(
             ))
             
     return colegas
+
+@router.get("/{id_turma}/exportar-csv",
+            summary="Exporta as notas da turma em formato CSV")
+def exportar_notas_csv(
+    id_turma: int,
+    db: Session = Depends(get_db),
+    current_professor: model.Professor = Depends(deps.get_current_professor)
+):
+    """
+    (Professor) Gera e retorna um ficheiro CSV com as notas de todos os alunos
+    matriculados na turma.
+    """
+    # 1. Validação: A turma existe e o professor é o dono?
+    turma = db.query(model.Turma).options(
+        joinedload(model.Turma.avaliacoes_definidas)
+    ).filter(model.Turma.id == id_turma).first()
+
+    if not turma:
+        raise HTTPException(status_code=404, detail="Turma não encontrada.")
+    
+    if turma.id_professor != current_professor.id:
+        raise HTTPException(status_code=403, detail="Acesso negado: Você não é o professor desta turma.")
+
+    # 2. Busca todos os dados (matrículas, alunos, notas)
+    matriculas = db.query(model.Matricula).options(
+        joinedload(model.Matricula.aluno), 
+        joinedload(model.Matricula.notas_avaliacoes)
+    ).filter(model.Matricula.id_turma == id_turma).order_by(model.Matricula.aluno.has(model.Usuario.nome)).all()
+
+    # 3. Prepara o ficheiro CSV em memória
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # 4. Define as "colunas" de avaliação (ex: "Prova 1", "Trabalho 1")
+    avaliacoes_colunas = sorted(turma.avaliacoes_definidas, key=lambda x: x.id)
+    
+    # 5. Escreve o cabeçalho (Header)
+    header = ["Matricula", "Aluno", "Status", "Nota Final"]
+    header.extend([av.nome for av in avaliacoes_colunas])
+    writer.writerow(header)
+
+    # 6. Escreve os dados de cada aluno
+    for matricula in matriculas:
+        if not matricula.aluno:
+            continue
+            
+        # Mapeia as notas do aluno (id_avaliacao -> nota) para busca rápida
+        notas_map = {
+            nota.id_avaliacao_turma: nota.nota 
+            for nota in matricula.notas_avaliacoes
+        }
+
+        # Prepara a linha
+        row = [
+            matricula.aluno.matricula,
+            matricula.aluno.nome,
+            matricula.status.value if matricula.status else "EM_CURSO",
+            matricula.nota_final if matricula.nota_final is not None else ""
+        ]
+        
+        # Adiciona as notas das avaliações na ordem correta
+        for av in avaliacoes_colunas:
+            nota = notas_map.get(av.id)
+            row.append(nota if nota is not None else "")
+            
+        writer.writerow(row)
+
+    # 7. Prepara a resposta para download
+    output.seek(0) # Volta ao início do ficheiro em memória
+    
+    headers = {
+        "Content-Disposition": f"attachment; filename=notas_turma_{turma.codigo}.csv"
+    }
+    
+    return StreamingResponse(output, media_type="text/csv", headers=headers)
