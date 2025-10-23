@@ -180,3 +180,104 @@ def gerar_diario_classe_pdf(turma: model.Turma, matriculas: list[model.Matricula
     c.save()
     buffer.seek(0)
     return buffer
+
+def gerar_relatorio_ocupacao_pdf(periodo: model.PeriodoLetivo, turmas: list[model.Turma]) -> io.BytesIO:
+    """
+    Gera o Relatório de Ocupação de Vagas em PDF para um período letivo.
+    """
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setTitle(f"Relatório de Ocupação - {periodo.ano}.{periodo.semestre}")
+    y_atual = ALTURA - MARGEM_SUPERIOR
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(MARGEM_ESQUERDA, y_atual, "Relatório de Ocupação de Vagas")
+    
+    y_atual -= 0.7 * cm
+    c.setFont("Helvetica", 12)
+    c.drawString(MARGEM_ESQUERDA, y_atual, f"Período Letivo: {periodo.ano}.{periodo.semestre}")
+    
+    y_atual -= 1 * cm 
+
+    dados_tabela = []
+
+    dados_tabela.append([
+        "Cód. Turma", 
+        "Disciplina", 
+        "Professor(a)",
+        "Vagas Ofertadas", 
+        "Vagas Ocupadas",
+        "% Ocupação"
+    ])
+
+    total_vagas = 0
+    total_ocupadas = 0
+
+    turmas_ordenadas = sorted(
+        [t for t in turmas if t.disciplina and t.professor],
+        key=lambda t: t.disciplina.nome
+    )
+
+    for turma in turmas_ordenadas:
+        vagas_ofertadas = turma.vagas
+        vagas_ocupadas = len(turma.matriculas) 
+        
+        if vagas_ofertadas > 0:
+            ocupacao = (vagas_ocupadas / vagas_ofertadas) * 100
+            ocupacao_str = f"{ocupacao:.1f}%"
+        else:
+            ocupacao_str = "N/A"
+            
+        total_vagas += vagas_ofertadas
+        total_ocupadas += vagas_ocupadas
+
+        dados_tabela.append([
+            turma.codigo,
+            Paragraph(turma.disciplina.nome, getSampleStyleSheet()['BodyText']),
+            Paragraph(turma.professor.nome, getSampleStyleSheet()['BodyText']),
+            str(vagas_ofertadas),
+            str(vagas_ocupadas),
+            ocupacao_str
+        ])
+
+    if total_vagas > 0:
+        ocupacao_total = (total_ocupadas / total_vagas) * 100
+        ocupacao_total_str = f"{ocupacao_total:.1f}%"
+    else:
+        ocupacao_total_str = "N/A"
+        
+    dados_tabela.append([
+        "TOTAL", "", "",
+        str(total_vagas),
+        str(total_ocupadas),
+        ocupacao_total_str
+    ])
+
+    tabela = Table(dados_tabela, colWidths=[
+        2.5 * cm, 6 * cm, 4.5 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm
+    ])
+    
+    estilo = TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.darkgreen),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 9),
+        ('BOTTOMPADDING', (0,0), (-1,0), 10),
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ('FONTSIZE', (0,1), (-1,-1), 8),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('GRID', (0,-1), (-1,-1), 1, colors.black),
+    ])
+    tabela.setStyle(estilo)
+
+    tabela.wrapOn(c, LARGURA - (2 * MARGEM_ESQUERDA), y_atual)
+    tabela.drawOn(c, MARGEM_ESQUERDA, y_atual - tabela._height)
+        
+    y_atual -= (tabela._height + 1 * cm)
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
