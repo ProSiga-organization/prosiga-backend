@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from . import schema as turma_schema
+from ..usuario import schema as usuario_schema
 from .. import model
 from ..database import get_db
 from .repository import TurmaRepository
@@ -130,3 +131,39 @@ def delete_avaliacao_coluna(
         raise HTTPException(status_code=403, detail="Professor não tem permissão para deletar esta avaliação.")
 
     repo.delete_avaliacao_turma(db, avaliacao_db=avaliacao_db)
+
+@router.get("/{id_turma}/colegas", 
+            response_model=List[usuario_schema.ColegaResponse], 
+            summary="Lista os colegas de uma turma")
+def get_colegas_turma(
+    id_turma: int,
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
+):
+    """
+    (Aluno) Retorna uma lista de colegas (nome e matrícula) matriculados 
+    na mesma turma que o aluno logado.
+    """
+    # 1. Segurança: Verifica se o próprio aluno logado está na turma
+    matricula_aluno_logado = repo_matricula.get_by_aluno_and_turma(
+        db, 
+        id_aluno=current_aluno.id, 
+        id_turma=id_turma
+    )
+    if not matricula_aluno_logado:
+        raise HTTPException(status_code=403, detail="Acesso negado. Você não está matriculado nesta turma.")
+
+    # 2. Busca todas as matrículas da turma
+    matriculas_da_turma = repo_matricula.get_matriculas_by_turma(db, id_turma=id_turma)
+
+    # 3. Formata a resposta para o schema ColegaResponse
+    colegas = []
+    for matricula in matriculas_da_turma:
+        # Verifica se a relação 'aluno' foi carregada e não é nula
+        if matricula.aluno:
+            colegas.append(usuario_schema.ColegaResponse(
+                nome=matricula.aluno.nome,
+                matricula=matricula.aluno.matricula
+            ))
+            
+    return colegas

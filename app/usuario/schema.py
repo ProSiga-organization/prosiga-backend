@@ -30,3 +30,11 @@ class CoordenadorResponse(UsuarioBaseResponse):
     pass
 
 AnyUsuarioResponse = Union[AlunoResponse, ProfessorResponse, CoordenadorResponse]
+
+class ColegaResponse(BaseModel):
+    """Schema para exibir informações públicas de um aluno em uma turma."""
+    nome: str
+    matricula: str
+
+    class Config:
+        model_config = {'from_attributes': True}
