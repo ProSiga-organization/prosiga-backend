@@ -10,6 +10,10 @@ class AvisoTurmaCreate(AvisoBase):
     """Schema para um Professor criar um aviso para uma turma"""
     id_turma: int
 
+class AvisoCursoCreate(AvisoBase):
+    """Schema para um Coordenador criar um aviso para um curso"""
+    id_curso: int
+
 class AvisoUpdate(BaseModel):
     """Schema para atualizar o título ou conteúdo de um aviso"""
     titulo: Optional[str] = None

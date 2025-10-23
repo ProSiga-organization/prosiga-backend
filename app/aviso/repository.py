@@ -21,6 +21,22 @@ class AvisoRepository:
         db.refresh(novo_aviso)
         return novo_aviso
 
+    def create_aviso_curso(self, db: Session, request: schema.AvisoCursoCreate, id_autor: int) -> model.Aviso:
+        """
+        Cria um novo aviso no banco de dados, ligado a um curso e a um autor.
+        """
+        novo_aviso = model.Aviso(
+            titulo=request.titulo,
+            conteudo=request.conteudo,
+            id_autor=id_autor,
+            id_turma=None, # É um aviso de curso
+            id_curso=request.id_curso
+        )
+        db.add(novo_aviso)
+        db.commit()
+        db.refresh(novo_aviso)
+        return novo_aviso
+
     def get_aviso_by_id(self, db: Session, id_aviso: int) -> Optional[model.Aviso]:
         """
         Busca um aviso específico pelo seu ID, já carregando o autor.
@@ -49,7 +65,6 @@ class AvisoRepository:
         db.delete(aviso_db)
         db.commit()
 
-
     def get_avisos_by_turma(self, db: Session, id_turma: int) -> List[model.Aviso]:
         """
         Retorna uma lista de todos os avisos de uma turma específica.
@@ -61,4 +76,15 @@ class AvisoRepository:
         ).order_by(
             model.Aviso.data_publicacao.desc()
         ).all()
-        
+
+    def get_avisos_by_curso(self, db: Session, id_curso: int) -> List[model.Aviso]:
+        """
+        Retorna uma lista de todos os avisos de um curso específico.
+        """
+        return db.query(model.Aviso).options(
+            joinedload(model.Aviso.autor)
+        ).filter(
+            model.Aviso.id_curso == id_curso
+        ).order_by(
+            model.Aviso.data_publicacao.desc()
+        ).all()
