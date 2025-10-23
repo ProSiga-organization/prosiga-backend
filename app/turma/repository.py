@@ -1,6 +1,7 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from .. import model
 from . import schema as turma_schema
+from ..model import Disciplina
 
 class TurmaRepository:
 
@@ -23,6 +24,18 @@ class TurmaRepository:
         if turma:
             db.delete(turma)
             db.commit()
+    
+    def get_turmas_by_disciplina_codigo(self, db: Session, codigo_disciplina: str) -> list[model.Turma]:
+        """
+        Busca TODAS as turmas de uma disciplina pelo código da disciplina,
+        já carregando a disciplina e as matrículas de cada turma.
+        """
+        return db.query(model.Turma).join(model.Disciplina).filter(
+            model.Disciplina.codigo == codigo_disciplina
+        ).options(
+            joinedload(model.Turma.disciplina), 
+            selectinload(model.Turma.matriculas)
+        ).all()
     
     def get_turmas_by_professor(self, db: Session, id_professor: int) -> list[model.Turma]:
         """Retorna todas as turmas de um professor específico."""
