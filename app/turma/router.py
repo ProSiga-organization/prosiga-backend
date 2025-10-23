@@ -274,7 +274,7 @@ def exportar_notas_csv(
     matriculas = db.query(model.Matricula).options(
         joinedload(model.Matricula.aluno), 
         joinedload(model.Matricula.notas_avaliacoes)
-    ).filter(model.Matricula.id_turma == id_turma).order_by(model.Matricula.aluno.has(model.Usuario.nome)).all()
+    ).filter(model.Matricula.id_turma == id_turma).join(model.Aluno, model.Matricula.id_aluno == model.Aluno.id).order_by(model.Aluno.nome).all()
 
     # 3. Prepara o ficheiro CSV em memória
     output = io.StringIO()
