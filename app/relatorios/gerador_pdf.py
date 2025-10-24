@@ -6,12 +6,14 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+from sqlalchemy.orm import Session
+from ..matricula.repository import MatriculaRepository
 
 MARGEM_ESQUERDA = 1.5 * cm
 MARGEM_SUPERIOR = 2 * cm
 LARGURA, ALTURA = A4 
 
-def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula]) -> io.BytesIO:
+def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula], semestre_atual: int) -> io.BytesIO:
     """
     Gera o histórico acadêmico de um aluno em PDF.
     """
@@ -35,6 +37,7 @@ def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula]) -
     c.drawString(MARGEM_ESQUERDA, y_atual, f"Matrícula: {aluno.matricula}")
     y_atual -= 0.5 * cm
     c.drawString(MARGEM_ESQUERDA, y_atual, f"CPF: {aluno.cpf[:3]}.***.{aluno.cpf[6:9]}-**")
+    c.drawRightString(LARGURA - MARGEM_ESQUERDA, y_atual, f"Semestre Atual (Estimado): {semestre_atual}")
     
     y_atual -= 1 * cm
 
@@ -108,7 +111,7 @@ def gerar_diario_classe_pdf(turma: model.Turma, matriculas: list[model.Matricula
     buffer = io.BytesIO()
     avaliacoes_colunas = sorted(turma.avaliacoes_definidas, key=lambda x: x.id)
     header = ["Matricula", "Aluno", "Status", "Nota Final"]
-    header.extend([Paragraph(av.nome, getSampleStyleSheet()['BodyText']) for av in avaliacoes_colunas]) # Permite quebra de linha
+    header.extend([Paragraph(av.nome, getSampleStyleSheet()['BodyText']) for av in avaliacoes_colunas])
 
 
     col_widths = [2.5 * cm, 6 * cm, 2.5 * cm, 2 * cm]
@@ -148,7 +151,7 @@ def gerar_diario_classe_pdf(turma: model.Turma, matriculas: list[model.Matricula
         
         row = [
             matricula.aluno.matricula,
-            Paragraph(matricula.aluno.nome, getSampleStyleSheet()['BodyText']), # Permite quebra de linha
+            Paragraph(matricula.aluno.nome, getSampleStyleSheet()['BodyText']),
             matricula.status.value if matricula.status else "EM_CURSO",
             str(matricula.nota_final) if matricula.nota_final is not None else "--"
         ]
@@ -371,18 +374,19 @@ def gerar_relatorio_turmas_professor_pdf(periodo: model.PeriodoLetivo, professor
     buffer.seek(0)
     return buffer
 
-def gerar_relatorio_alunos_curso_pdf(cursos: list[model.Curso]) -> io.BytesIO:
+def gerar_relatorio_alunos_curso_pdf(db: Session, cursos: list[model.Curso]) -> io.BytesIO:
     """
     Gera o Relatório de Lista de Alunos por Curso em PDF.
     Espera que a lista de cursos já venha com os alunos pré-carregados.
     """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4,
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             leftMargin=MARGEM_ESQUERDA, rightMargin=MARGEM_ESQUERDA,
                             topMargin=MARGEM_SUPERIOR, bottomMargin=MARGEM_SUPERIOR)
     
     styles = getSampleStyleSheet()
     story = []
+    repo_matricula = MatriculaRepository()
 
     story.append(Paragraph("Relatório de Alunos por Curso", styles['h1']))
     story.append(Spacer(1, 0.5 * cm))
@@ -398,7 +402,8 @@ def gerar_relatorio_alunos_curso_pdf(cursos: list[model.Curso]) -> io.BytesIO:
             "Matrícula", 
             "Nome do Aluno", 
             "CPF",
-            "Status da Conta"
+            "Status da Conta",
+            "Semestre Atual"
         ])
 
         alunos_do_curso = sorted(curso.alunos, key=lambda a: a.nome)
@@ -411,15 +416,17 @@ def gerar_relatorio_alunos_curso_pdf(cursos: list[model.Curso]) -> io.BytesIO:
         total_geral_alunos += len(alunos_do_curso)
 
         for aluno in alunos_do_curso:
+            semestre_atual = repo_matricula.get_periodos_cursados_por_aluno(db, id_aluno=aluno.id)
             dados_tabela.append([
                 aluno.matricula,
                 Paragraph(aluno.nome, styles['BodyText']),
                 f"{aluno.cpf[:3]}.***.{aluno.cpf[6:9]}-**", 
-                aluno.status.value
+                aluno.status.value,
+                str(semestre_atual)
             ])
-            
+        
         tabela = Table(dados_tabela, colWidths=[
-            3.5 * cm, 8 * cm, 4 * cm, 3 * cm
+            3 * cm, 7 * cm, 3.5 * cm, 2.5 * cm, 2.5 * cm
         ])
 
         estilo = TableStyle([

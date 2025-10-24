@@ -38,3 +38,6 @@ class ColegaResponse(BaseModel):
 
     class Config:
         model_config = {'from_attributes': True}
+
+class SemestreAtualResponse(BaseModel):
+    semestre_atual: int

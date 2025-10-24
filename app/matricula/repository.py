@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import distinct, tuple_
 from .. import model
 from . import schema as matricula_schema
 
@@ -91,7 +92,7 @@ class MatriculaRepository:
             # Se a célula existe, apenas atualiza a nota
             nota_db.nota = nota
         else:
-            # Se não existe (cenário raro), cria a célula
+            # Se não existe, cria a célula
             nota_db = model.NotaAvaliacao(
                 nota=nota,
                 id_avaliacao_turma=id_avaliacao_turma,
@@ -112,3 +113,22 @@ class MatriculaRepository:
         db.commit()
         db.refresh(matricula)
         return matricula
+    
+    def get_periodos_cursados_por_aluno(self, db: Session, id_aluno: int) -> int:
+        """
+        Calcula o número de semestres letivos distintos em que um aluno
+        esteve matriculado (considerando matrículas em turmas com período letivo definido).
+        """
+        # Consulta que junta Matricula -> Turma -> PeriodoLetivo
+        # Seleciona apenas os pares (ano, semestre) distintos
+        query = db.query(
+            distinct(tuple_(model.PeriodoLetivo.ano, model.PeriodoLetivo.semestre))
+        ).join(
+            model.Turma, model.Matricula.id_turma == model.Turma.id
+        ).join(
+            model.PeriodoLetivo, model.Turma.id_periodo_letivo == model.PeriodoLetivo.id
+        ).filter(
+            model.Matricula.id_aluno == id_aluno
+        )
+        numero_de_periodos_distintos = query.count()
+        return numero_de_periodos_distintos

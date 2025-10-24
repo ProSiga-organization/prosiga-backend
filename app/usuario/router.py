@@ -168,11 +168,13 @@ def get_historico_pdf(
     ).filter(
         model.Matricula.id_aluno == current_aluno.id
     ).all()
+    semestre_atual = repo_matricula.get_periodos_cursados_por_aluno(db, id_aluno=current_aluno.id)
 
     try:
         pdf_buffer = gerador_pdf.gerar_historico_pdf(
             aluno=current_aluno,
-            matriculas=matriculas
+            matriculas=matriculas,
+            semestre_atual=semestre_atual
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
@@ -206,11 +208,13 @@ def get_historico_aluno_admin(
     ).filter(
         model.Matricula.id_aluno == aluno.id
     ).all()
+    semestre_atual = repo_matricula.get_periodos_cursados_por_aluno(db, id_aluno=aluno.id)
 
     try:
         pdf_buffer = gerador_pdf.gerar_historico_pdf(
             aluno=aluno,
-            matriculas=matriculas
+            matriculas=matriculas,
+            semestre_atual=semestre_atual
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
@@ -221,3 +225,22 @@ def get_historico_aluno_admin(
     }
 
     return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
+
+# --- Contagem de Semestre ---
+@router.get("/me/semestre-atual",
+            response_model=schema.SemestreAtualResponse,
+            summary="Retorna o semestre atual estimado do aluno logado")
+def get_semestre_atual(
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
+):
+    """
+    (Aluno) Calcula e retorna o número de períodos letivos distintos
+    em que o aluno esteve matriculado.
+    """
+    numero_periodos = repo_matricula.get_periodos_cursados_por_aluno(
+        db, 
+        id_aluno=current_aluno.id
+    )
+
+    return schema.SemestreAtualResponse(semestre_atual=numero_periodos)
