@@ -13,57 +13,52 @@ MARGEM_ESQUERDA = 1.5 * cm
 MARGEM_SUPERIOR = 2 * cm
 LARGURA, ALTURA = A4 
 
-def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula], semestre_atual: int) -> io.BytesIO:
+def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula], semestre_atual: int, ira: float | None) -> io.BytesIO:
     """
     Gera o histórico acadêmico de um aluno em PDF.
     """
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-
     c.setTitle(f"Histórico - {aluno.nome}")
 
     y_atual = ALTURA - MARGEM_SUPERIOR
     c.setFont("Helvetica-Bold", 16)
     c.drawString(MARGEM_ESQUERDA, y_atual, "Histórico Acadêmico")
-    
     y_atual -= 0.5 * cm
-    c.setStrokeColorRGB(0, 0, 0) 
+    c.setStrokeColorRGB(0, 0, 0)
     c.line(MARGEM_ESQUERDA, y_atual, LARGURA - MARGEM_ESQUERDA, y_atual)
 
     y_atual -= 1 * cm
     c.setFont("Helvetica", 12)
     c.drawString(MARGEM_ESQUERDA, y_atual, f"Nome: {aluno.nome}")
+    c.drawRightString(LARGURA - MARGEM_ESQUERDA, y_atual, f"Semestre Atual (Estimado): {semestre_atual}")
     y_atual -= 0.5 * cm
     c.drawString(MARGEM_ESQUERDA, y_atual, f"Matrícula: {aluno.matricula}")
+    ira_str = f"{ira:.2f}" if ira is not None else "N/A"
+    c.drawRightString(LARGURA - MARGEM_ESQUERDA, y_atual, f"IRA (0-5): {ira_str}")
     y_atual -= 0.5 * cm
     c.drawString(MARGEM_ESQUERDA, y_atual, f"CPF: {aluno.cpf[:3]}.***.{aluno.cpf[6:9]}-**")
-    c.drawRightString(LARGURA - MARGEM_ESQUERDA, y_atual, f"Semestre Atual (Estimado): {semestre_atual}")
-    
     y_atual -= 1 * cm
 
     dados_tabela = []
     dados_tabela.append([
-        "Cód. Disciplina", 
-        "Disciplina", 
-        "Cód. Turma", 
-        "Status", 
+        "Cód. Disciplina",
+        "Disciplina",
+        "Cód. Turma",
+        "Status",
         "Nota Final"
     ])
-    
     total_aprovado = 0
     matriculas_ordenadas = sorted(
         [m for m in matriculas if m.turma and m.turma.disciplina],
         key=lambda m: m.turma.disciplina.semestre_ideal or 99
     )
-
     for m in matriculas_ordenadas:
         disciplina = m.turma.disciplina
         status = m.status.value if m.status else "N/A"
         nota = str(m.nota_final) if m.nota_final is not None else "--"
-        
         if m.status == model.StatusAprovacaoEnum.APROVADO:
             total_aprovado += 1
-
         dados_tabela.append([
             disciplina.codigo,
             disciplina.nome,
@@ -71,14 +66,12 @@ def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula], s
             status,
             nota
         ])
-
-    if not dados_tabela:
+    if len(dados_tabela) <= 1:
         c.drawString(MARGEM_ESQUERDA, y_atual, "Nenhuma disciplina cursada.")
     else:
         tabela = Table(dados_tabela, colWidths=[
             3 * cm, 7 * cm, 3 * cm, 3 * cm, 2.5 * cm
         ])
-        
         estilo = TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.grey),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -93,9 +86,7 @@ def gerar_historico_pdf(aluno: model.Aluno, matriculas: list[model.Matricula], s
         tabela.setStyle(estilo)
         tabela.wrapOn(c, LARGURA - (2 * MARGEM_ESQUERDA), y_atual)
         tabela.drawOn(c, MARGEM_ESQUERDA, y_atual - tabela._height)
-        
         y_atual -= (tabela._height + 1 * cm)
-
     c.setFont("Helvetica-Bold", 10)
     c.drawString(MARGEM_ESQUERDA, y_atual, f"Total de Disciplinas Aprovadas: {total_aprovado}")
     c.showPage()

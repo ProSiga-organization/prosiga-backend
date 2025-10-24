@@ -169,12 +169,14 @@ def get_historico_pdf(
         model.Matricula.id_aluno == current_aluno.id
     ).all()
     semestre_atual = repo_matricula.get_periodos_cursados_por_aluno(db, id_aluno=current_aluno.id)
+    ira = repo_matricula.calcular_ira(db, id_aluno=current_aluno.id)
 
     try:
         pdf_buffer = gerador_pdf.gerar_historico_pdf(
             aluno=current_aluno,
             matriculas=matriculas,
-            semestre_atual=semestre_atual
+            semestre_atual=semestre_atual,
+            ira=ira
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
@@ -209,12 +211,14 @@ def get_historico_aluno_admin(
         model.Matricula.id_aluno == aluno.id
     ).all()
     semestre_atual = repo_matricula.get_periodos_cursados_por_aluno(db, id_aluno=aluno.id)
+    ira = repo_matricula.calcular_ira(db, id_aluno=aluno.id)
 
     try:
         pdf_buffer = gerador_pdf.gerar_historico_pdf(
             aluno=aluno,
             matriculas=matriculas,
-            semestre_atual=semestre_atual
+            semestre_atual=semestre_atual,
+            ira=ira
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
