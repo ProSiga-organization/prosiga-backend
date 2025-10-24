@@ -41,3 +41,6 @@ class ColegaResponse(BaseModel):
 
 class SemestreAtualResponse(BaseModel):
     semestre_atual: int
+
+class IraResponse(BaseModel):
+    ira: float

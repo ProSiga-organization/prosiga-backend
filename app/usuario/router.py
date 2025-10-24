@@ -244,3 +244,23 @@ def get_semestre_atual(
     )
 
     return schema.SemestreAtualResponse(semestre_atual=numero_periodos)
+
+# --- Cálculo de IRA ---
+@router.get("/me/ira",
+            response_model=schema.IraResponse,
+            summary="Retorna o IRA do aluno logado")
+def get_ira(
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno)
+):
+    """
+    (Aluno) Calcula e retorna o Índice de Rendimento Acadêmico (IRA),
+    baseado na média das notas finais das disciplinas concluídas.
+    """
+
+    ira_calculado = repo_matricula.calcular_ira(
+        db,
+        id_aluno=current_aluno.id
+    )
+    
+    return schema.IraResponse(ira=ira_calculado)

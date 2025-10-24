@@ -132,3 +132,29 @@ class MatriculaRepository:
         )
         numero_de_periodos_distintos = query.count()
         return numero_de_periodos_distintos
+    
+    def calcular_ira(self, db: Session, id_aluno: int) -> float:
+        """
+        Calcula o IRA simplificado de um aluno na escala 0-5.
+        Média simples das notas finais (escala 0-10) das disciplinas concluídas (Aprovado/Reprovado),
+        dividida por 2.
+        Retorna 5.0 se nenhuma disciplina concluída for encontrada.
+        """
+        matriculas_concluidas = db.query(model.Matricula).filter(
+            model.Matricula.id_aluno == id_aluno,
+            model.Matricula.status.in_([
+                model.StatusAprovacaoEnum.APROVADO,
+                model.StatusAprovacaoEnum.REPROVADO
+            ]),
+            model.Matricula.nota_final.isnot(None)
+        ).all()
+
+        if not matriculas_concluidas:
+            return 5.0
+
+        soma_notas = sum(m.nota_final for m in matriculas_concluidas)
+        numero_disciplinas = len(matriculas_concluidas)
+        media_0_10 = soma_notas / numero_disciplinas
+        ira_0_5 = media_0_10 / 2.0
+
+        return round(ira_0_5, 2)
