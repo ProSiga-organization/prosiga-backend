@@ -119,17 +119,16 @@ class MatriculaRepository:
         Calcula o número de semestres letivos distintos em que um aluno
         esteve matriculado (considerando matrículas em turmas com período letivo definido).
         """
-        # Consulta que junta Matricula -> Turma -> PeriodoLetivo
-        # Seleciona apenas os pares (ano, semestre) distintos
         query = db.query(
             distinct(tuple_(model.PeriodoLetivo.ano, model.PeriodoLetivo.semestre))
-        ).join(
+        ).select_from(model.Matricula).join(
             model.Turma, model.Matricula.id_turma == model.Turma.id
         ).join(
             model.PeriodoLetivo, model.Turma.id_periodo_letivo == model.PeriodoLetivo.id
         ).filter(
             model.Matricula.id_aluno == id_aluno
         )
+
         numero_de_periodos_distintos = query.count()
         return numero_de_periodos_distintos
     
