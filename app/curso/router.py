@@ -31,6 +31,7 @@ def get_relatorio_alunos_por_curso(
 
     try:
         pdf_buffer = gerador_pdf.gerar_relatorio_alunos_curso_pdf(
+            db=db,
             cursos=cursos
         )
     except Exception as e:

@@ -35,7 +35,7 @@ class Aluno(Usuario):
     matricula: str = Column(String(20), unique=True)
     matriculas = relationship("Matricula", back_populates="aluno")
     id_curso: int = Column(Integer, ForeignKey("cursos.id"), nullable=True)
-    curso = relationship("Curso")
+    curso = relationship("Curso", back_populates="alunos")
 
 class Professor(Usuario):
     __mapper_args__ = {"polymorphic_identity": "professor"}
@@ -50,7 +50,7 @@ class Curso(Base):
     codigo: str = Column(String(20), unique=True, nullable=False)
     nome: str = Column(String(100), nullable=False)
     avisos = relationship("Aviso", back_populates="curso")
-    # alunos = relationship("Aluno", back_populates="curso")
+    alunos = relationship("Aluno", back_populates="curso")
 
 class Disciplina(Base):
     __tablename__ = "disciplinas"
