@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from ..model import StatusContaEnum
-from typing import Union
+from typing import Union, Optional
 
 class PrimeiroAcessoSchema(BaseModel):
     cpf: str
@@ -43,4 +43,4 @@ class SemestreAtualResponse(BaseModel):
     semestre_atual: int
 
 class IraResponse(BaseModel):
-    ira: float
+    ira: Optional[float] = None
