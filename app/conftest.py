@@ -164,3 +164,51 @@ def setup_turmas(db_session: Session, mock_professor: model.Professor):
         "turma_com_vaga": turma_com_vaga,
         "turma_sem_vaga": turma_sem_vaga
     }
+
+@pytest.fixture
+def setup_matricula_existente(db_session: Session, mock_aluno: model.Aluno, mock_professor: model.Professor):
+    """
+    Cria um ambiente completo para testes de notas:
+    1. Período, Disciplina
+    2. Turma (pertencente ao mock_professor)
+    3. Aluno (mock_aluno) JÁ MATRICULADO na Turma.
+    """
+    # 1. Criar Período e Disciplina
+    periodo = model.PeriodoLetivo(
+        ano=2025, semestre=1, inicio_matricula=date(2025,1,1),
+        fim_matricula=date(2025,1,10), fim_trancamento=date(2025,3,1)
+    )
+    disciplina = model.Disciplina(codigo="COMP101", nome="Programação I", semestre_ideal=1)
+    db_session.add_all([periodo, disciplina])
+    db_session.commit()
+    
+    # 2. Criar Turma do Professor
+    turma_professor = model.Turma(
+        codigo="T1-PROF",
+        vagas=10,
+        id_disciplina=disciplina.id,
+        id_professor=mock_professor.id, # Turma pertence ao Professor
+        id_periodo_letivo=periodo.id
+    )
+    db_session.add(turma_professor)
+    db_session.commit()
+
+    # 3. Criar a Matrícula (Aluno na Turma)
+    # (Usamos o repo de Matrícula para garantir que a lógica de 
+    # criação de 'células' vazias seja testada se já existissem avaliações)
+    matricula_repo = model.Matricula(
+        id_aluno=mock_aluno.id,
+        id_turma=turma_professor.id
+    )
+    # NOTA: Aqui usamos o create() do repo se ele existir, 
+    # mas para este teste, adicionar direto é seguro
+    # pois estamos testando o OUTRO lado (criação de Avaliação)
+    db_session.add(matricula_repo)
+    db_session.commit()
+    
+    return {
+        "turma": turma_professor,
+        "matricula": matricula_repo,
+        "aluno": mock_aluno,
+        "professor": mock_professor
+    }
