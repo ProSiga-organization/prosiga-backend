@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy.orm import Session
@@ -146,3 +147,57 @@ def test_coordenador_gera_relatorio_turmas_professor_pdf(client: TestClient, db_
     assert "attachment; filename=" in response.headers["content-disposition"]
     assert f"relatorio_turmas_professor_{periodo.ano}_{periodo.semestre}.pdf" in response.headers["content-disposition"]
     assert len(response.content) > 0
+
+def test_coordenador_atualiza_periodo_letivo(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador):
+    """
+    Testa US-009: Coordenador atualiza um período letivo existente.
+   
+    """
+    periodo = model.PeriodoLetivo(
+        ano=2026, semestre=1, inicio_matricula=date(2026,1,1),
+        fim_matricula=date(2026,1,10), fim_trancamento=date(2026,3,1)
+    )
+    db_session.add(periodo)
+    db_session.commit()
+    
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    
+    payload_atualizacao = {
+        "ano": 2026,
+        "semestre": 1,
+        "inicio_matricula": "2026-01-05",
+        "fim_matricula": "2026-01-15", 
+        "fim_trancamento": "2026-03-10" 
+    }
+
+    response = client.put(f"/periodos-letivos/{periodo.id}", json=payload_atualizacao)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["inicio_matricula"] == "2026-01-05"
+    assert data["fim_trancamento"] == "2026-03-10"
+
+    db_session.refresh(periodo)
+    assert periodo.inicio_matricula == date(2026, 1, 5)
+
+def test_coordenador_deleta_periodo_letivo(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador):
+    """
+    Testa US-009: Coordenador deleta um período letivo.
+   
+    """
+    periodo = model.PeriodoLetivo(
+        ano=2027, semestre=1, inicio_matricula=date(2027,1,1),
+        fim_matricula=date(2027,1,10), fim_trancamento=date(2027,3,1)
+    )
+    db_session.add(periodo)
+    db_session.commit()
+    id_periodo = periodo.id
+    
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+
+    response = client.delete(f"/periodos-letivos/{id_periodo}")
+
+    assert response.status_code == 204
+
+    periodo_db = db_session.get(model.PeriodoLetivo, id_periodo)
+    assert periodo_db is None
