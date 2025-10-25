@@ -241,3 +241,31 @@ def test_aluno_nao_pode_gerar_diario_pdf_do_professor(client: TestClient, db_ses
 
     assert response.status_code == 403
     assert "Acesso negado: Apenas para professores" in response.json()["detail"]
+
+def test_coordenador_cria_turma_sucesso(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, setup_filtros: dict):
+    """
+    Testa US-010: Coordenador cria uma nova turma.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    id_disciplina = setup_filtros["disciplina_s1"].id
+    id_periodo = setup_filtros["periodo_1"].id
+    id_professor = setup_filtros["prof_1"].id
+    
+    payload = {
+        "codigo": "T-ADMIN",
+        "vagas": 50,
+        "horario": "Seg 19:00-21:00",
+        "local": "Sala 101",
+        "id_disciplina": id_disciplina,
+        "id_professor": id_professor,
+        "id_periodo_letivo": id_periodo
+    }
+
+    response = client.post("/turmas/", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["codigo"] == "T-ADMIN"
+    assert data["vagas"] == 50
+    assert data["id_professor"] == id_professor
