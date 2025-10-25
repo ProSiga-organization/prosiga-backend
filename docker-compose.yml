@@ -10,7 +10,7 @@ services:
       db:
         condition: service_healthy
     
-    command: ["pytest", "--cov=app/periodo_letivo", "--cov-report=term-missing"]
+    command: ["pytest", "--cov=app", "--cov-report=term-missing"]
 
   backend-api:
     build: .

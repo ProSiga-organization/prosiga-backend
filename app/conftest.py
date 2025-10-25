@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
+from sqlalchemy.orm import Session
 from app.main import app
 from app.database import Base, get_db
 from app import model
@@ -33,17 +33,14 @@ def db_session():
     connection.close()
 
 @pytest.fixture(scope="function")
-def client(db_session):
+def client(db_session: Session):
     """
     Fixture que cria um TestClient e sobrescreve a dependência get_db
     para usar o banco de dados de teste (db_session).
     """
 
     def override_get_db():
-        try:
-            yield db_session
-        finally:
-            db_session.close()
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides.pop(deps.get_current_coordenador, None)
