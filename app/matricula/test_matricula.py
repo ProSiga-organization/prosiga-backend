@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.main import app
 from app import deps
 from app.conftest import mock_auth_aluno, mock_auth_professor
+from datetime import date
 
 def test_calcular_ira_sem_disciplinas():
     """
@@ -136,3 +137,73 @@ def test_matricular_como_professor_falha(client: TestClient, mock_professor: mod
     
     assert response.status_code == 403
     assert "Apenas alunos podem se matricular" in response.json()["detail"]
+
+
+def test_trancar_disciplina_sucesso_no_prazo(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-024: Trancamento com sucesso, feito DENTRO do prazo.
+   
+    """
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    matricula = setup_matricula_existente["matricula"]
+
+    data_de_hoje_mock = date(2025, 2, 15) 
+    
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+    
+    with patch('app.matricula.router.date') as mock_date:
+        mock_date.today.return_value = data_de_hoje_mock
+        
+        response = client.patch(f"/matriculas/{turma.id}/trancar")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "TRANCADO"
+    
+    db_session.refresh(matricula)
+    assert matricula.status == model.StatusAprovacaoEnum.TRANCADO
+
+
+def test_trancar_disciplina_falha_fora_do_prazo(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-024: Falha (400) ao tentar trancar FORA do prazo.
+   
+    """
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    data_de_hoje_mock = date(2025, 3, 2)
+    
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+
+    with patch('app.matricula.router.date') as mock_date:
+        mock_date.today.return_value = data_de_hoje_mock
+        
+        response = client.patch(f"/matriculas/{turma.id}/trancar")
+
+    assert response.status_code == 400
+    assert "Prazo para trancamento encerrado" in response.json()["detail"]
+
+
+def test_trancar_disciplina_falha_status_invalido(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-024: Falha (400) ao tentar trancar uma disciplina já trancada.
+   
+    """
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    matricula = setup_matricula_existente["matricula"]
+    
+    matricula.status = model.StatusAprovacaoEnum.TRANCADO
+    db_session.commit()
+    
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+    
+    data_de_hoje_mock = date(2025, 2, 15)
+
+    with patch('app.matricula.router.date') as mock_date:
+        mock_date.today.return_value = data_de_hoje_mock
+        
+        response = client.patch(f"/matriculas/{turma.id}/trancar")
+
+    assert response.status_code == 400
+    assert "Não é possível trancar. Status atual: TRANCADO" in response.json()["detail"]
