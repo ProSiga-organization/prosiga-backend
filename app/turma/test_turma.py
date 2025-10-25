@@ -269,3 +269,49 @@ def test_coordenador_cria_turma_sucesso(client: TestClient, db_session: Session,
     assert data["codigo"] == "T-ADMIN"
     assert data["vagas"] == 50
     assert data["id_professor"] == id_professor
+
+def test_professor_atualiza_nome_avaliacao_coluna(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-015: Professor (dono) atualiza o nome de uma "coluna" de avaliação.
+   
+    """
+    professor = setup_matricula_existente["professor"]
+    turma = setup_matricula_existente["turma"]
+
+    avaliacao = model.AvaliacaoTurma(nome="P1", id_turma=turma.id)
+    db_session.add(avaliacao)
+    db_session.commit()
+    
+    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(professor)
+
+    response = client.put(
+        f"/turmas/avaliacoes/{avaliacao.id}",
+        json={"nome": "Prova 1 - Substitutiva"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nome"] == "Prova 1 - Substitutiva"
+
+    db_session.refresh(avaliacao)
+    assert avaliacao.nome == "Prova 1 - Substitutiva"
+
+def test_professor_deleta_avaliacao_coluna(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-015: Professor (dono) deleta uma "coluna" de avaliação.
+   
+    """
+    professor = setup_matricula_existente["professor"]
+    turma = setup_matricula_existente["turma"]
+    
+    avaliacao = model.AvaliacaoTurma(nome="Avaliacao Temporaria", id_turma=turma.id)
+    db_session.add(avaliacao)
+    db_session.commit()
+    id_avaliacao = avaliacao.id
+    
+    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(professor)
+
+    response = client.delete(f"/turmas/avaliacoes/{id_avaliacao}")
+
+    assert response.status_code == 204 
+    avaliacao_db = db_session.get(model.AvaliacaoTurma, id_avaliacao)
+    assert avaliacao_db is None

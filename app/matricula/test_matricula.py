@@ -339,3 +339,36 @@ def test_coordenador_matricula_aluno_nao_encontrado(client: TestClient, db_sessi
 
     assert response.status_code == 404
     assert "Aluno não encontrado com esta matrícula" in response.json()["detail"]
+
+
+def test_professor_atualiza_nota_final_e_status_aluno(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-015: Professor (dono) atualiza a nota final e o status
+    (APROVADO/REPROVADO) de um aluno.
+   
+    """
+    professor = setup_matricula_existente["professor"]
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    matricula = setup_matricula_existente["matricula"]
+    
+    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(professor)
+    
+    payload = {
+        "nota_final": 8.5,
+        "status": "APROVADO"
+    }
+
+    response = client.patch(
+        f"/matriculas/{turma.id}/{aluno.matricula}",
+        json=payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["nota_final"] == 8.5
+    assert data["status"] == "APROVADO"
+
+    db_session.refresh(matricula)
+    assert matricula.nota_final == 8.5
+    assert matricula.status == model.StatusAprovacaoEnum.APROVADO

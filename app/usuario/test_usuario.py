@@ -152,3 +152,33 @@ def test_aluno_gera_proprio_historico_pdf(client: TestClient, db_session: Sessio
     assert len(response.content) > 0
     mock_get_periodos.assert_called_once_with(db_session, id_aluno=aluno.id)
     mock_calcular_ira.assert_called_once_with(db_session, id_aluno=aluno.id)
+
+
+def test_coordenador_desativa_conta_aluno(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, mock_aluno: model.Aluno):
+    """
+    Testa US-006: Coordenador desativa a conta de outro usuário (Aluno).
+   
+    """
+    assert mock_aluno.status == model.StatusContaEnum.ATIVO
+    
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+
+    response = client.patch(f"/usuarios/{mock_aluno.cpf}/desativar")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "INATIVO"
+
+    db_session.refresh(mock_aluno)
+    assert mock_aluno.status == model.StatusContaEnum.INATIVO
+
+def test_coordenador_falha_desativar_propria_conta(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador):
+    """
+    Testa US-006: Falha (400) se o Coordenador tentar desativar a si mesmo.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+
+    response = client.patch(f"/usuarios/{mock_coordenador.cpf}/desativar")
+
+    assert response.status_code == 400
+    assert "Não é permitido desativar a própria conta" in response.json()["detail"]
