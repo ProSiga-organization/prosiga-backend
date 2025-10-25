@@ -7,19 +7,15 @@ from .. import deps
 from .repository import CursoRepository
 from ..relatorios import gerador_pdf
 
-router = APIRouter(
-    prefix="/cursos",
-    tags=["Cursos"]
-)
+router = APIRouter(prefix="/cursos", tags=["Cursos"])
 
 repo = CursoRepository()
 
 
-@router.get("/relatorio-alunos",
-            summary="Gera o Relatório de Alunos por Curso em PDF")
+@router.get("/relatorio-alunos", summary="Gera o Relatório de Alunos por Curso em PDF")
 def get_relatorio_alunos_por_curso(
     db: Session = Depends(get_db),
-    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador)
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
 ):
     """
     (Coordenador) Gera e retorna um ficheiro PDF listando todos os alunos
@@ -30,16 +26,13 @@ def get_relatorio_alunos_por_curso(
         raise HTTPException(status_code=404, detail="Nenhum curso encontrado.")
 
     try:
-        pdf_buffer = gerador_pdf.gerar_relatorio_alunos_curso_pdf(
-            db=db,
-            cursos=cursos
-        )
+        pdf_buffer = gerador_pdf.gerar_relatorio_alunos_curso_pdf(db=db, cursos=cursos)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF Alunos/Curso: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Erro ao gerar o PDF Alunos/Curso: {e}"
+        )
 
     filename = "relatorio_alunos_por_curso.pdf"
-    headers = {
-        "Content-Disposition": f"attachment; filename={filename}"
-    }
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
 
     return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)

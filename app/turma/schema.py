@@ -1,6 +1,7 @@
 from pydantic import BaseModel
-from typing import List, Optional 
+from typing import List, Optional
 import enum
+
 
 class StatusTurmaAluno(str, enum.Enum):
     A_FAZER = "A_FAZER"
@@ -8,11 +9,14 @@ class StatusTurmaAluno(str, enum.Enum):
     JA_CONCLUIDO = "JA_CONCLUIDO"
     TRANCADO = "TRANCADO"
 
+
 class AvaliacaoTurmaBase(BaseModel):
     nome: str
 
+
 class AvaliacaoTurmaCreate(AvaliacaoTurmaBase):
     pass
+
 
 class AvaliacaoTurmaResponse(AvaliacaoTurmaBase):
     id: int
@@ -21,17 +25,6 @@ class AvaliacaoTurmaResponse(AvaliacaoTurmaBase):
     class Config:
         from_attributes = True
 
-class TurmaBase(BaseModel):
-    codigo: str
-    vagas: int
-    horario: str | None = None
-    local: str | None = None
-    id_disciplina: int
-    id_professor: int
-    id_periodo_letivo: int
-
-class TurmaCreate(TurmaBase):
-    pass
 
 class TurmaBase(BaseModel):
     codigo: str
@@ -42,13 +35,29 @@ class TurmaBase(BaseModel):
     id_professor: int
     id_periodo_letivo: int
 
+
 class TurmaCreate(TurmaBase):
     pass
+
+
+class TurmaBase(BaseModel):
+    codigo: str
+    vagas: int
+    horario: str | None = None
+    local: str | None = None
+    id_disciplina: int
+    id_professor: int
+    id_periodo_letivo: int
+
+
+class TurmaCreate(TurmaBase):
+    pass
+
 
 class TurmaResponse(TurmaBase):
     id: int
     avaliacoes_definidas: List[AvaliacaoTurmaResponse] = []
-    
+
     class Config:
         from_attributes = True
 

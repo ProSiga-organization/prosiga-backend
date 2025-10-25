@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 import pytest
 
+
 def test_health_check(client: TestClient):
     """
     Testa o endpoint de health check (GET /).

@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI
 from .usuario.router import router as usuario_router
 from .periodo_letivo.router import router as periodo_letivo_router
@@ -14,10 +13,11 @@ app = FastAPI(title="PróSiga API", description="API do PróSiga.")
 app.include_router(usuario_router)
 app.include_router(periodo_letivo_router)
 app.include_router(turma_router)
-app.include_router(matricula_router) 
+app.include_router(matricula_router)
 app.include_router(aviso_router)
 app.include_router(curso_router)
 Base.metadata.create_all(bind=engine)
+
 
 @app.get("/")
 def health_check():
