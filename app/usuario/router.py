@@ -123,6 +123,9 @@ def upload_usuarios_csv(
 
         return {"message": response_message}
 
+    except HTTPException as e:
+        db.rollback()
+        raise e
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao processar o ficheiro: {e}")
