@@ -169,7 +169,7 @@ def test_aluno_filtra_turmas_por_codigo_disciplina(client: TestClient, db_sessio
     
     assert response_2.status_code == 200
     assert len(response_2.json()) == 3
-    
+
 
 def test_professor_lista_apenas_suas_turmas(client: TestClient, db_session: Session, setup_filtros: dict):
     """
@@ -190,3 +190,54 @@ def test_professor_lista_apenas_suas_turmas(client: TestClient, db_session: Sess
     codigos_turmas_prof1 = {t["codigo"] for t in data}
     assert codigos_turmas_prof1 == {"T1", "T2"}
     assert "T3" not in codigos_turmas_prof1
+
+def test_professor_exporta_notas_csv(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-016: Professor (dono) exporta o CSV de notas da turma.
+   
+    """
+
+    professor = setup_matricula_existente["professor"]
+    turma = setup_matricula_existente["turma"]
+    
+    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(professor)
+    response = client.get(f"/turmas/{turma.id}/exportar-csv")
+    
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert "attachment; filename=" in response.headers["content-disposition"]
+    assert f"notas_turma_{turma.codigo}.csv" in response.headers["content-disposition"]
+    assert len(response.content) > 0
+
+def test_professor_gera_diario_pdf(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-017: Professor (dono) gera o diário de classe em PDF.
+   
+    """
+    professor = setup_matricula_existente["professor"]
+    turma = setup_matricula_existente["turma"]
+    
+    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(professor)
+    response = client.get(f"/turmas/{turma.id}/diario-pdf")
+    
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment; filename=" in response.headers["content-disposition"]
+    assert f"diario_classe_{turma.codigo}.pdf" in response.headers["content-disposition"]
+    
+    assert len(response.content) > 0
+
+def test_aluno_nao_pode_gerar_diario_pdf_do_professor(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa Segurança: Aluno (403) não pode gerar diário de classe do professor.
+   
+    """
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+
+    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(aluno)
+
+    response = client.get(f"/turmas/{turma.id}/diario-pdf")
+
+    assert response.status_code == 403
+    assert "Acesso negado: Apenas para professores" in response.json()["detail"]
