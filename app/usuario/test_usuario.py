@@ -182,3 +182,22 @@ def test_coordenador_falha_desativar_propria_conta(client: TestClient, db_sessio
 
     assert response.status_code == 400
     assert "Não é permitido desativar a própria conta" in response.json()["detail"]
+
+def test_get_usuario_me(client: TestClient, db_session: Session, mock_aluno: model.Aluno):
+    """
+    Testa US-002: Qualquer utilizador autenticado (ex: Aluno) pode obter
+    os seus próprios dados via /usuarios/me.
+   
+    """
+    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(mock_aluno)
+
+    response = client.get("/usuarios/me")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == mock_aluno.id
+    assert data["cpf"] == mock_aluno.cpf
+    assert data["nome"] == mock_aluno.nome
+    assert data["email"] == mock_aluno.email
+    assert data["tipo_usuario"] == "aluno"
+    assert data["matricula"] == mock_aluno.matricula
