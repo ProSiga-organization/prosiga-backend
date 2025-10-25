@@ -44,13 +44,26 @@ def client(db_session: Session):
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    
+    # --- CORREÇÃO ESTÁ AQUI ---
+    # Limpa TODOS os mocks de dependência que usamos
+    # O 'pop' remove a chave. O segundo argumento (None) evita erros se a chave não existir.
+    app.dependency_overrides.pop(deps.get_current_user, None)
     app.dependency_overrides.pop(deps.get_current_coordenador, None)
     app.dependency_overrides.pop(deps.get_current_professor, None)
     app.dependency_overrides.pop(deps.get_current_aluno, None)
 
     yield TestClient(app)
 
+    # Limpa o override do DB depois do teste
     app.dependency_overrides.pop(get_db, None)
+    
+    # --- E AQUI TAMBÉM ---
+    # Limpa os mocks de autenticação DEPOIS do teste, garantindo um estado limpo
+    app.dependency_overrides.pop(deps.get_current_user, None)
+    app.dependency_overrides.pop(deps.get_current_coordenador, None)
+    app.dependency_overrides.pop(deps.get_current_professor, None)
+    app.dependency_overrides.pop(deps.get_current_aluno, None)
 
 @pytest.fixture
 def mock_coordenador(db_session):
@@ -173,7 +186,7 @@ def setup_matricula_existente(db_session: Session, mock_aluno: model.Aluno, mock
     2. Turma (pertencente ao mock_professor)
     3. Aluno (mock_aluno) JÁ MATRICULADO na Turma.
     """
-    # 1. Criar Período e Disciplina
+
     periodo = model.PeriodoLetivo(
         ano=2025, semestre=1, inicio_matricula=date(2025,1,1),
         fim_matricula=date(2025,1,10), fim_trancamento=date(2025,3,1)
@@ -182,27 +195,22 @@ def setup_matricula_existente(db_session: Session, mock_aluno: model.Aluno, mock
     db_session.add_all([periodo, disciplina])
     db_session.commit()
     
-    # 2. Criar Turma do Professor
+
     turma_professor = model.Turma(
         codigo="T1-PROF",
         vagas=10,
         id_disciplina=disciplina.id,
-        id_professor=mock_professor.id, # Turma pertence ao Professor
+        id_professor=mock_professor.id, 
         id_periodo_letivo=periodo.id
     )
     db_session.add(turma_professor)
     db_session.commit()
 
-    # 3. Criar a Matrícula (Aluno na Turma)
-    # (Usamos o repo de Matrícula para garantir que a lógica de 
-    # criação de 'células' vazias seja testada se já existissem avaliações)
     matricula_repo = model.Matricula(
         id_aluno=mock_aluno.id,
         id_turma=turma_professor.id
     )
-    # NOTA: Aqui usamos o create() do repo se ele existir, 
-    # mas para este teste, adicionar direto é seguro
-    # pois estamos testando o OUTRO lado (criação de Avaliação)
+
     db_session.add(matricula_repo)
     db_session.commit()
     
@@ -211,4 +219,38 @@ def setup_matricula_existente(db_session: Session, mock_aluno: model.Aluno, mock
         "matricula": matricula_repo,
         "aluno": mock_aluno,
         "professor": mock_professor
+    }
+
+@pytest.fixture
+def setup_aviso_context(db_session: Session, mock_professor: model.Professor):
+    """
+    Cria um Curso e uma Turma (pertencente ao mock_professor)
+    para os testes do módulo de Avisos.
+    """
+
+    curso_cc = model.Curso(codigo="CC", nome="Ciencia da Computacao")
+    db_session.add(curso_cc)
+    db_session.commit()
+    
+    periodo = model.PeriodoLetivo(
+        ano=2025, semestre=1, inicio_matricula=date(2025,1,1),
+        fim_matricula=date(2025,1,10), fim_trancamento=date(2025,3,1)
+    )
+    disciplina = model.Disciplina(codigo="AVS101", nome="Testes de Aviso", semestre_ideal=1)
+    db_session.add_all([periodo, disciplina])
+    db_session.commit()
+
+    turma_prof = model.Turma(
+        codigo="T-AVISO",
+        vagas=10,
+        id_disciplina=disciplina.id,
+        id_professor=mock_professor.id,
+        id_periodo_letivo=periodo.id
+    )
+    db_session.add(turma_prof)
+    db_session.commit()
+    
+    return {
+        "curso": curso_cc,
+        "turma": turma_prof
     }
