@@ -207,3 +207,92 @@ def test_trancar_disciplina_falha_status_invalido(client: TestClient, db_session
 
     assert response.status_code == 400
     assert "Não é possível trancar. Status atual: TRANCADO" in response.json()["detail"]
+    
+
+def test_aluno_lista_suas_matriculas(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-022: Aluno lista suas próprias matrículas.
+   
+    """
+
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+
+    response = client.get("/matriculas/me")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["id_aluno"] == aluno.id
+    assert data[0]["id_turma"] == turma.id
+
+def test_aluno_sem_matriculas_lista_vazio(client: TestClient, db_session: Session, mock_aluno: model.Aluno):
+    """
+    Testa US-022: Aluno sem matrículas recebe 404.
+    (Nota: O endpoint levanta 404 se a lista for vazia)
+   
+    """
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
+
+    response = client.get("/matriculas/me")
+    
+    assert response.status_code == 404
+    assert "Nenhuma matrícula encontrada" in response.json()["detail"]
+
+
+def test_professor_lista_alunos_da_turma(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-015: Professor (dono) lista alunos/matrículas da sua turma.
+   
+    """
+    professor = setup_matricula_existente["professor"]
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    
+    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(professor)
+
+    response = client.get(f"/turmas/{turma.id}/matriculas")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["id_aluno"] == aluno.id
+    assert data[0]["id_turma"] == turma.id
+
+def test_aluno_lista_colegas_de_turma(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-023: Aluno (matriculado) lista seus colegas.
+   
+    """
+    aluno = setup_matricula_existente["aluno"]
+    turma = setup_matricula_existente["turma"]
+    
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+    
+    response = client.get(f"/turmas/{turma.id}/colegas")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["nome"] == aluno.nome
+    assert data[0]["matricula"] == aluno.matricula
+
+def test_aluno_nao_lista_colegas_se_nao_matriculado(client: TestClient, db_session: Session, mock_aluno: model.Aluno, setup_turmas: dict):
+    """
+    Testa US-023: Falha (403) se o aluno tentar ver colegas de uma
+    turma onde ele NÃO está matriculado.
+   
+    """
+    turma_alheia = setup_turmas["turma_com_vaga"]
+    
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
+
+    response = client.get(f"/turmas/{turma_alheia.id}/colegas")
+
+    assert response.status_code == 403
+    assert "Você não está matriculado nesta turma" in response.json()["detail"]
