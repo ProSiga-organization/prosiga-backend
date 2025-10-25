@@ -231,3 +231,29 @@ def test_get_usuario_me_ira(client: TestClient, db_session: Session, mock_aluno:
     assert response.status_code == 200
     assert response.json() == {"ira": 3.75}
     mock_calcular_ira.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
+
+def test_coordenador_gera_historico_aluno_especifico_pdf(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, mock_aluno: model.Aluno):
+    """
+    Testa US-012: Coordenador gera o PDF do histórico de um aluno específico.
+    Mockamos as chamadas ao repositório por causa do SQLite.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    
+    with patch('app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno', return_value=3) as mock_get_periodos, \
+         patch('app.usuario.router.repo_matricula.calcular_ira', return_value=4.1) as mock_calcular_ira:
+
+        response = client.get(f"/usuarios/{mock_aluno.matricula}/historico-pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment; filename=" in response.headers["content-disposition"]
+    assert f"historico_{mock_aluno.matricula}.pdf" in response.headers["content-disposition"]
+    assert len(response.content) > 0
+
+    mock_get_periodos.assert_called_once()
+    mock_calcular_ira.assert_called_once()
+
+    assert mock_get_periodos.call_args.kwargs == {'id_aluno': mock_aluno.id}
+    assert mock_calcular_ira.call_args.kwargs == {'id_aluno': mock_aluno.id}
+    assert isinstance(mock_get_periodos.call_args.args[0], Session)
+    assert isinstance(mock_calcular_ira.call_args.args[0], Session)
