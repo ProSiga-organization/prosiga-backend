@@ -201,3 +201,33 @@ def test_get_usuario_me(client: TestClient, db_session: Session, mock_aluno: mod
     assert data["email"] == mock_aluno.email
     assert data["tipo_usuario"] == "aluno"
     assert data["matricula"] == mock_aluno.matricula
+
+def test_get_usuario_me_semestre_atual(client: TestClient, db_session: Session, mock_aluno: model.Aluno):
+    """
+    Testa US-102 (API): Aluno obtém o semestre atual estimado.
+    Mockamos a chamada ao repositório por causa do SQLite.
+   
+    """
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
+
+    with patch('app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno', return_value=3) as mock_get_periodos:
+        response = client.get("/usuarios/me/semestre-atual")
+
+    assert response.status_code == 200
+    assert response.json() == {"semestre_atual": 3}
+    mock_get_periodos.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
+
+
+def test_get_usuario_me_ira(client: TestClient, db_session: Session, mock_aluno: model.Aluno):
+    """
+    Testa US-101 (API): Aluno obtém o seu IRA.
+    Mockamos a chamada ao repositório por causa do SQLite (embora pudesse funcionar).
+   
+    """
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
+    with patch('app.usuario.router.repo_matricula.calcular_ira', return_value=3.75) as mock_calcular_ira:
+        response = client.get("/usuarios/me/ira")
+
+    assert response.status_code == 200
+    assert response.json() == {"ira": 3.75}
+    mock_calcular_ira.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
