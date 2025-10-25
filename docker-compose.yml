@@ -1,17 +1,31 @@
 version: '3.8'
 services:
-  backend:
-    build: .
-    container_name: backend-prosiga
-    ports:
-      - "8000:8000"
 
+  backend-tests:
+    build: .
+    container_name: backend-prosiga-tests
     volumes:
       - .:/app
     depends_on:
       db:
         condition: service_healthy
+    
+    command: ["pytest", "--cov=app/periodo_letivo", "--cov-report=term-missing"]
 
+  backend-api:
+    build: .
+    container_name: backend-prosiga-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+    depends_on:
+      db:
+        condition: service_healthy
+      backend-tests:
+        condition: service_completed_successfully
+    
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   db:

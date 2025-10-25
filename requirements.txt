@@ -13,3 +13,4 @@ pytest
 httpx
 requests
 reportlab
+pytest-cov
