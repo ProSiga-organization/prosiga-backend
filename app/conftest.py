@@ -44,22 +44,13 @@ def client(db_session: Session):
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    
-    # --- CORREÇÃO ESTÁ AQUI ---
-    # Limpa TODOS os mocks de dependência que usamos
-    # O 'pop' remove a chave. O segundo argumento (None) evita erros se a chave não existir.
     app.dependency_overrides.pop(deps.get_current_user, None)
     app.dependency_overrides.pop(deps.get_current_coordenador, None)
     app.dependency_overrides.pop(deps.get_current_professor, None)
     app.dependency_overrides.pop(deps.get_current_aluno, None)
 
     yield TestClient(app)
-
-    # Limpa o override do DB depois do teste
     app.dependency_overrides.pop(get_db, None)
-    
-    # --- E AQUI TAMBÉM ---
-    # Limpa os mocks de autenticação DEPOIS do teste, garantindo um estado limpo
     app.dependency_overrides.pop(deps.get_current_user, None)
     app.dependency_overrides.pop(deps.get_current_coordenador, None)
     app.dependency_overrides.pop(deps.get_current_professor, None)
@@ -253,4 +244,66 @@ def setup_aviso_context(db_session: Session, mock_professor: model.Professor):
     return {
         "curso": curso_cc,
         "turma": turma_prof
+    }
+
+@pytest.fixture
+def setup_filtros(db_session: Session, mock_professor: model.Professor):
+    """
+    Cria um "mundo" complexo para testar filtros de turma (US-018) e
+    a visão do professor (US-013).
+    
+    Cenário:
+    - Prof 1 (mock_professor)
+    - Prof 2 (outro_professor)
+    - Período 2025.1 e 2025.2
+    - Disciplina Semestre 1 (COMP101)
+    - Disciplina Semestre 2 (COMP102)
+    """
+    
+    # --- Professores ---
+    outro_professor = model.Professor(
+        id=99, cpf="99988877766", nome="Outro Professor", email="outro@prof.com", 
+        senha_hash="hash", status=model.StatusContaEnum.ATIVO
+    )
+    db_session.add(outro_professor)
+
+    # --- Períodos ---
+    periodo_1 = model.PeriodoLetivo(ano=2025, semestre=1, inicio_matricula=date(2025,1,1), fim_matricula=date(2025,1,10), fim_trancamento=date(2025,3,1))
+    periodo_2 = model.PeriodoLetivo(ano=2025, semestre=2, inicio_matricula=date(2025,6,1), fim_matricula=date(2025,6,10), fim_trancamento=date(2025,8,1))
+    db_session.add_all([periodo_1, periodo_2])
+
+    # --- Disciplinas ---
+    disciplina_s1 = model.Disciplina(codigo="COMP101", nome="Programação I", semestre_ideal=1)
+    disciplina_s2 = model.Disciplina(codigo="COMP102", nome="Estrutura de Dados", semestre_ideal=2)
+    db_session.add_all([disciplina_s1, disciplina_s2])
+    db_session.commit() 
+
+    t1_prof1_p1_s1 = model.Turma(
+        codigo="T1", vagas=10, id_disciplina=disciplina_s1.id, 
+        id_professor=mock_professor.id, id_periodo_letivo=periodo_1.id
+    )
+    
+    t2_prof1_p2_s2 = model.Turma(
+        codigo="T2", vagas=10, id_disciplina=disciplina_s2.id, 
+        id_professor=mock_professor.id, id_periodo_letivo=periodo_2.id
+    )
+    
+    t3_prof2_p1_s1 = model.Turma(
+        codigo="T3", vagas=10, id_disciplina=disciplina_s1.id, 
+        id_professor=outro_professor.id, id_periodo_letivo=periodo_1.id
+    )
+    
+    db_session.add_all([t1_prof1_p1_s1, t2_prof1_p2_s2, t3_prof2_p1_s1])
+    db_session.commit()
+    
+    return {
+        "prof_1": mock_professor,
+        "prof_2": outro_professor,
+        "periodo_1": periodo_1,
+        "periodo_2": periodo_2,
+        "disciplina_s1": disciplina_s1,
+        "disciplina_s2": disciplina_s2,
+        "turma_prof1_p1_s1": t1_prof1_p1_s1, # Turma T1
+        "turma_prof1_p2_s2": t2_prof1_p2_s2, # Turma T2
+        "turma_prof2_p1_s1": t3_prof2_p1_s1, # Turma T3
     }
