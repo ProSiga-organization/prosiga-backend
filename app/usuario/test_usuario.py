@@ -4,7 +4,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app import model, deps
 from app.security import verify_password 
-from app.conftest import mock_auth_coordenador, app
+from app.conftest import mock_auth_aluno, mock_auth_coordenador, app
+from unittest.mock import patch
 
 def test_primeiro_acesso_sucesso(client: TestClient, db_session: Session):
     """
@@ -130,3 +131,24 @@ def test_upload_csv_erro_curso_invalido(client: TestClient, db_session: Session,
     
     aluno_db = db_session.query(model.Aluno).filter_by(cpf="55533344401").first()
     assert aluno_db is None
+
+def test_aluno_gera_proprio_historico_pdf(client: TestClient, db_session: Session, setup_matricula_existente: dict):
+    """
+    Testa US-021: Aluno gera seu próprio histórico acadêmico em PDF.
+   
+    """
+    aluno = setup_matricula_existente["aluno"]
+    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+
+    with patch('app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno', return_value=2) as mock_get_periodos, \
+         patch('app.usuario.router.repo_matricula.calcular_ira', return_value=4.2) as mock_calcular_ira:
+
+        response = client.get("/usuarios/me/historico-pdf")
+    
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment; filename=" in response.headers["content-disposition"]
+    assert f"historico_{aluno.matricula}.pdf" in response.headers["content-disposition"]
+    assert len(response.content) > 0
+    mock_get_periodos.assert_called_once_with(db_session, id_aluno=aluno.id)
+    mock_calcular_ira.assert_called_once_with(db_session, id_aluno=aluno.id)
