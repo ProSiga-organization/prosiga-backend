@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy.orm import Session
-from app.main import app  
+from app.main import app
 from app import deps
 from app import model
-from app.conftest import mock_auth_coordenador, mock_auth_aluno
+from app.conftest import mock_auth_coordenador
 
 def test_get_all_periodos_letivos_vazio(client: TestClient):
     """
@@ -38,28 +38,45 @@ def test_create_periodo_letivo_como_coordenador(client: TestClient, mock_coorden
     assert data["semestre"] == 1
     assert data["id"] is not None
 
-def test_create_periodo_letivo_como_aluno(client: TestClient, mock_aluno: model.Aluno):
+@pytest.mark.parametrize("perfil, mock_user_fixture, esperado_status, esperado_detalhe", [
+    ("aluno", "mock_aluno", 403, "Acesso negado: Apenas para coordenadores."),
+    ("professor", "mock_professor", 403, "Acesso negado: Apenas para coordenadores."),
+    ("token_invalido", None, 401, "Não foi possível validar as credenciais com o serviço de autenticação.")
+])
+def test_create_periodo_letivo_sem_permissao(
+    client: TestClient, 
+    perfil: str, 
+    mock_user_fixture: str | None, 
+    esperado_status: int, 
+    esperado_detalhe: str,
+    request 
+):
     """
-    Testa POST /periodos-letivos/ (Autenticado como Aluno)
-    Deve falhar com erro 403 (Forbidden).
+    Testa (de forma parametrizada) que Alunos, Professores ou usuários
+    com token inválido não podem criar períodos letivos.
     """
-    def mock_get_current_user():
-        return mock_aluno
+    app.dependency_overrides.pop(deps.get_current_user, None)
+    app.dependency_overrides.pop(deps.get_current_coordenador, None)
+    headers = {}
+
+    if perfil == "aluno" or perfil == "professor":
+        mock_user = request.getfixturevalue(mock_user_fixture)
+        
+        def mock_get_current_user():
+            return mock_user
+        
+        app.dependency_overrides[deps.get_current_user] = mock_get_current_user
+        
+        headers = {"Authorization": "Bearer mock-token"}
+
+    elif perfil == "token_invalido":
+        headers = {"Authorization": "Bearer token-que-vai-falhar"}
+
+    payload = {"ano": 2026, "semestre": 1, "inicio_matricula": "2026-01-01", "fim_matricula": "2026-01-10", "fim_trancamento": "2026-03-01"}
+    response = client.post("/periodos-letivos/", json=payload, headers=headers)
     
-    app.dependency_overrides[deps.get_current_user] = mock_get_current_user
-    
-    payload = {
-        "ano": 2026,
-        "semestre": 1,
-        "inicio_matricula": "2026-01-01",
-        "fim_matricula": "2026-01-10",
-        "fim_trancamento": "2026-03-01"
-    }
-    
-    response = client.post("/periodos-letivos/", json=payload)
-    
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Acesso negado: Apenas para coordenadores."
+    assert response.status_code == esperado_status
+    assert esperado_detalhe in response.json()["detail"]
 
 def test_get_periodo_letivo_by_id(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador):
     """
