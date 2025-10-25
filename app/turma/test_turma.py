@@ -315,3 +315,48 @@ def test_professor_deleta_avaliacao_coluna(client: TestClient, db_session: Sessi
     assert response.status_code == 204 
     avaliacao_db = db_session.get(model.AvaliacaoTurma, id_avaliacao)
     assert avaliacao_db is None
+
+def test_coordenador_atualiza_turma(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, setup_filtros: dict):
+    """
+    Testa US-010: Coordenador atualiza dados de uma turma existente.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    turma_original = setup_filtros["turma_prof1_p1_s1"]
+    
+    payload_atualizacao = {
+        "codigo": turma_original.codigo,
+        "vagas": 99, 
+        "horario": "Qua 19:00", 
+        "local": "Sala NOVA",
+        "id_disciplina": turma_original.id_disciplina,
+        "id_professor": turma_original.id_professor,
+        "id_periodo_letivo": turma_original.id_periodo_letivo
+    }
+
+    response = client.put(f"/turmas/{turma_original.id}", json=payload_atualizacao)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["vagas"] == 99
+    assert data["horario"] == "Qua 19:00"
+    assert data["local"] == "Sala NOVA"
+
+    db_session.refresh(turma_original)
+    assert turma_original.vagas == 99
+
+def test_coordenador_deleta_turma(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, setup_filtros: dict):
+    """
+    Testa US-010: Coordenador deleta uma turma.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+
+    turma_para_deletar = setup_filtros["turma_prof1_p1_s1"]
+    id_turma = turma_para_deletar.id
+
+    response = client.delete(f"/turmas/{id_turma}")
+    assert response.status_code == 204
+
+    turma_db = db_session.get(model.Turma, id_turma)
+    assert turma_db is None
