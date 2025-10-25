@@ -114,3 +114,35 @@ def test_get_periodo_letivo_by_id_not_found(client: TestClient):
     
     assert response.status_code == 404
     assert response.json()["detail"] == "Período letivo não encontrado."
+
+def test_coordenador_gera_relatorio_ocupacao_pdf(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, setup_matricula_existente: dict):
+    """
+    Testa US-012: Coordenador gera PDF de Ocupação de Vagas.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    periodo = setup_matricula_existente["periodo"]
+    response = client.get(f"/periodos-letivos/{periodo.id}/relatorio-ocupacao")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment; filename=" in response.headers["content-disposition"]
+    assert f"relatorio_ocupacao_{periodo.ano}_{periodo.semestre}.pdf" in response.headers["content-disposition"]
+    assert len(response.content) > 0
+
+def test_coordenador_gera_relatorio_turmas_professor_pdf(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, setup_matricula_existente: dict):
+    """
+    Testa US-012: Coordenador gera PDF de Turmas por Professor.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    
+    periodo = setup_matricula_existente["periodo"]
+
+    response = client.get(f"/periodos-letivos/{periodo.id}/relatorio-turmas-professor")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment; filename=" in response.headers["content-disposition"]
+    assert f"relatorio_turmas_professor_{periodo.ano}_{periodo.semestre}.pdf" in response.headers["content-disposition"]
+    assert len(response.content) > 0

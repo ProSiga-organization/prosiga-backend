@@ -209,7 +209,8 @@ def setup_matricula_existente(db_session: Session, mock_aluno: model.Aluno, mock
         "turma": turma_professor,
         "matricula": matricula_repo,
         "aluno": mock_aluno,
-        "professor": mock_professor
+        "professor": mock_professor,
+        "periodo": periodo
     }
 
 @pytest.fixture
