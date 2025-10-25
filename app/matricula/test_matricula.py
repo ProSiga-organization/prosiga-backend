@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.main import app
 from app import deps
-from app.conftest import mock_auth_aluno, mock_auth_professor
+from app.conftest import mock_auth_aluno, mock_auth_professor, mock_auth_coordenador
 from datetime import date
 
 def test_calcular_ira_sem_disciplinas():
@@ -207,7 +207,7 @@ def test_trancar_disciplina_falha_status_invalido(client: TestClient, db_session
 
     assert response.status_code == 400
     assert "Não é possível trancar. Status atual: TRANCADO" in response.json()["detail"]
-    
+
 
 def test_aluno_lista_suas_matriculas(client: TestClient, db_session: Session, setup_matricula_existente: dict):
     """
@@ -296,3 +296,46 @@ def test_aluno_nao_lista_colegas_se_nao_matriculado(client: TestClient, db_sessi
 
     assert response.status_code == 403
     assert "Você não está matriculado nesta turma" in response.json()["detail"]
+
+
+def test_coordenador_matricula_aluno_em_turma_lotada(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, mock_aluno: model.Aluno, setup_turmas: dict):
+    """
+    Testa US-011: Coordenador matricula aluno (por matrícula)
+    e IGNORA a restrição de vagas (turma_sem_vaga tem 0 vagas).
+   
+    """
+
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    turma_lotada = setup_turmas["turma_sem_vaga"]
+    
+    payload = {
+        "matricula_aluno": mock_aluno.matricula,
+        "id_turma": turma_lotada.id
+    }
+
+    response = client.post("/matriculas/admin/matricular", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["id_aluno"] == mock_aluno.id
+    assert data["id_turma"] == turma_lotada.id
+
+def test_coordenador_matricula_aluno_nao_encontrado(client: TestClient, db_session: Session, mock_coordenador: model.Coordenador, setup_turmas: dict):
+    """
+    Testa US-011: Falha (404) se o coordenador tentar matricular
+    um aluno com número de matrícula inexistente.
+   
+    """
+    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(mock_coordenador)
+    
+    id_turma = setup_turmas["turma_com_vaga"].id
+    
+    payload = {
+        "matricula_aluno": "MATRICULA-FANTASMA-999",
+        "id_turma": id_turma
+    }
+
+    response = client.post("/matriculas/admin/matricular", json=payload)
+
+    assert response.status_code == 404
+    assert "Aluno não encontrado com esta matrícula" in response.json()["detail"]
