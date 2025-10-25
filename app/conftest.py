@@ -7,6 +7,7 @@ from app.main import app
 from app.database import Base, get_db
 from app import model
 from app import deps
+from datetime import date
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
@@ -114,3 +115,52 @@ def mock_auth_aluno(mock_aluno_fixture: model.Aluno):
     def _mock():
         return mock_aluno_fixture
     return _mock
+
+@pytest.fixture
+def setup_turmas(db_session: Session, mock_professor: model.Professor):
+    """
+    Cria um conjunto de dados complexo (Período, Disciplina, Turmas)
+    para ser usado nos testes de matrícula e turma.
+    """
+    periodo = model.PeriodoLetivo(
+        ano=2025,
+        semestre=1,
+        inicio_matricula=date(2025, 1, 1),
+        fim_matricula=date(2025, 1, 10),
+        fim_trancamento=date(2025, 3, 1)
+    )
+    
+    disciplina = model.Disciplina(
+        codigo="COMP101",
+        nome="Programação I",
+        semestre_ideal=1
+    )
+    
+    db_session.add_all([periodo, disciplina])
+    db_session.commit()
+    
+    turma_com_vaga = model.Turma(
+        codigo="T1",
+        vagas=1,
+        id_disciplina=disciplina.id,
+        id_professor=mock_professor.id,
+        id_periodo_letivo=periodo.id
+    )
+    
+    turma_sem_vaga = model.Turma(
+        codigo="T2",
+        vagas=0,
+        id_disciplina=disciplina.id,
+        id_professor=mock_professor.id,
+        id_periodo_letivo=periodo.id
+    )
+    
+    db_session.add_all([turma_com_vaga, turma_sem_vaga])
+    db_session.commit()
+    
+    return {
+        "periodo": periodo,
+        "disciplina": disciplina,
+        "turma_com_vaga": turma_com_vaga,
+        "turma_sem_vaga": turma_sem_vaga
+    }
