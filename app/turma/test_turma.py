@@ -360,3 +360,29 @@ def test_coordenador_deleta_turma(client: TestClient, db_session: Session, mock_
 
     turma_db = db_session.get(model.Turma, id_turma)
     assert turma_db is None
+
+def test_get_turma_by_id(client: TestClient, db_session: Session, setup_filtros: dict):
+    """
+    Testa GET /turmas/{id}: Busca uma turma específica pelo ID.
+    Não requer autenticação.
+   
+    """
+    turma_existente = setup_filtros["turma_prof1_p1_s1"]
+
+    response = client.get(f"/turmas/{turma_existente.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == turma_existente.id
+    assert data["codigo"] == turma_existente.codigo
+    assert data["id_disciplina"] == turma_existente.id_disciplina
+
+def test_get_turma_by_id_not_found(client: TestClient):
+    """
+    Testa GET /turmas/{id}: Retorna 404 para ID inexistente.
+   
+    """
+    response = client.get("/turmas/99999")
+
+    assert response.status_code == 404
+    assert "Turma não encontrada" in response.json()["detail"]
