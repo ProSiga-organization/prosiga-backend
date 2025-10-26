@@ -1,11 +1,12 @@
 from datetime import date
-from fastapi.testclient import TestClient
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.main import app
-from app import deps
-from app import model
+
+from app import deps, model
 from app.conftest import mock_auth_coordenador
+from app.main import app
 
 
 def test_get_all_periodos_letivos_vazio(client: TestClient):

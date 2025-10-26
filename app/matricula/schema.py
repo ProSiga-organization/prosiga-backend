@@ -1,6 +1,8 @@
-from pydantic import BaseModel
-from ..model import StatusAprovacaoEnum
 from typing import List, Optional
+
+from pydantic import BaseModel
+
+from ..model import StatusAprovacaoEnum
 
 
 class NotaAvaliacaoBase(BaseModel):

@@ -1,15 +1,16 @@
 from datetime import date
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-from . import schema as matricula_schema
-from .. import model
+
+from .. import deps, model
 from ..database import get_db
-from .repository import MatriculaRepository
+from ..periodo_letivo.repository import PeriodoLetivoRepository
 from ..turma.repository import TurmaRepository
 from ..usuario.repository import UsuarioRepository
-from ..periodo_letivo.repository import PeriodoLetivoRepository
-from .. import deps
+from . import schema as matricula_schema
+from .repository import MatriculaRepository
 
 router = APIRouter(prefix="/matriculas", tags=["Matrículas"])
 

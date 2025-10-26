@@ -1,13 +1,13 @@
+from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import Session
-from app.main import app
+from sqlalchemy.orm import Session, sessionmaker
+
+from app import deps, model
 from app.database import Base, get_db
-from app import model
-from app import deps
-from datetime import date
+from app.main import app
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 

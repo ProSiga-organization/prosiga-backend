@@ -1,15 +1,15 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
-from typing import List
-from sqlalchemy.orm import Session
-from . import schema
-from .. import model
+
+from .. import deps, model
 from ..database import get_db
-from .repository import PeriodoLetivoRepository
-from .. import deps
 from ..relatorios import gerador_pdf
 from ..usuario.repository import UsuarioRepository
+from . import schema
+from .repository import PeriodoLetivoRepository
 
 router = APIRouter(prefix="/periodos-letivos", tags=["Períodos Letivos"])
 

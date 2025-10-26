@@ -1,7 +1,8 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+
 from . import model
 from .database import get_db
 from .usuario.repository import UsuarioRepository
@@ -21,7 +22,7 @@ def get_current_user(
     """
     try:
         headers = {"Authorization": f"Bearer {token.credentials}"}
-        response = requests.get(AUTH_SERVICE_URL, headers=headers)
+        response = requests.get(AUTH_SERVICE_URL, headers=headers, timeout=5.0)
         response.raise_for_status()
 
         user_data = response.json()
@@ -35,12 +36,12 @@ def get_current_user(
 
         return user
 
-    except requests.RequestException:
+    except requests.RequestException as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Não foi possível validar as credenciais com o serviço de autenticação.",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
 
 def get_current_aluno(

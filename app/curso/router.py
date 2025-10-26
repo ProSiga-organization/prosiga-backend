@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from .. import model
+
+from .. import deps, model
 from ..database import get_db
-from .. import deps
-from .repository import CursoRepository
 from ..relatorios import gerador_pdf
+from .repository import CursoRepository
 
 router = APIRouter(prefix="/cursos", tags=["Cursos"])
 

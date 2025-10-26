@@ -1,12 +1,15 @@
 import io
-from .. import model
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import inch, cm
-from reportlab.pdfgen import canvas
+
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm, inch
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
+                                TableStyle)
 from sqlalchemy.orm import Session
+
+from .. import model
 from ..matricula.repository import MatriculaRepository
 
 MARGEM_ESQUERDA = 1.5 * cm

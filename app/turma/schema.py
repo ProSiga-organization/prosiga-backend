@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import List, Optional
 import enum
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 
 class StatusTurmaAluno(str, enum.Enum):
@@ -24,20 +25,6 @@ class AvaliacaoTurmaResponse(AvaliacaoTurmaBase):
 
     class Config:
         from_attributes = True
-
-
-class TurmaBase(BaseModel):
-    codigo: str
-    vagas: int
-    horario: str | None = None
-    local: str | None = None
-    id_disciplina: int
-    id_professor: int
-    id_periodo_letivo: int
-
-
-class TurmaCreate(TurmaBase):
-    pass
 
 
 class TurmaBase(BaseModel):

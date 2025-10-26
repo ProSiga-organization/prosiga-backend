@@ -1,11 +1,13 @@
-import pytest
 import io
+from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app import model, deps
+
+from app import deps, model
+from app.conftest import app, mock_auth_aluno, mock_auth_coordenador
 from app.security import verify_password
-from app.conftest import mock_auth_aluno, mock_auth_coordenador, app
-from unittest.mock import patch
 
 
 def test_primeiro_acesso_sucesso(client: TestClient, db_session: Session):

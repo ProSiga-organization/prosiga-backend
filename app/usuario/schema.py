@@ -1,6 +1,8 @@
+from typing import Optional, Union
+
 from pydantic import BaseModel, EmailStr
+
 from ..model import StatusContaEnum
-from typing import Union, Optional
 
 
 class PrimeiroAcessoSchema(BaseModel):

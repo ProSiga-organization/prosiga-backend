@@ -1,21 +1,12 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Boolean,
-    Enum,
-    Date,
-    Float,
-    ForeignKey,
-    ForeignKeyConstraint,
-    UniqueConstraint,
-    Text,
-    DateTime,
-)
+import enum
+
+from sqlalchemy import (Boolean, Column, Date, DateTime, Enum, Float,
+                        ForeignKey, ForeignKeyConstraint, Integer, String,
+                        Text, UniqueConstraint)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from .database import Base
-import enum
 
 
 class StatusContaEnum(str, enum.Enum):
@@ -172,7 +163,7 @@ class Aviso(Base):
     titulo: str = Column(String(255), nullable=False)
     conteudo: str = Column(Text, nullable=True)
     data_publicacao: DateTime = Column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now()  # pylint: disable=not-callable
     )
     id_autor: int = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     id_turma: int = Column(Integer, ForeignKey("turmas.id"), nullable=True)

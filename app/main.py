@@ -1,11 +1,12 @@
 from fastapi import FastAPI
-from .usuario.router import router as usuario_router
-from .periodo_letivo.router import router as periodo_letivo_router
-from .turma.router import router as turma_router
-from .matricula.router import router as matricula_router
+
 from .aviso.router import router as aviso_router
 from .curso.router import router as curso_router
-from .database import engine, Base
+from .database import Base, engine
+from .matricula.router import router as matricula_router
+from .periodo_letivo.router import router as periodo_letivo_router
+from .turma.router import router as turma_router
+from .usuario.router import router as usuario_router
 
 Base.metadata.create_all(bind=engine)
 

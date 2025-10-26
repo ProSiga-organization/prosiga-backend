@@ -1,14 +1,13 @@
-# prosiga-backend/app/aviso/router.py
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-from .. import model
+
+from .. import deps, model
 from ..database import get_db
-from .. import deps
+from ..turma.repository import TurmaRepository
 from . import schema
 from .repository import AvisoRepository
-from ..turma.repository import TurmaRepository
 
 router = APIRouter(prefix="/avisos", tags=["Avisos"])
 

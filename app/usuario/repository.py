@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session, joinedload
-from . import schema
+
 from .. import model
 from ..security import get_password_hash
+from . import schema
 
 
 class UsuarioRepository:

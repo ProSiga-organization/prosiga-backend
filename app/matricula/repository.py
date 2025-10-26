@@ -1,5 +1,6 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import distinct, tuple_
+from sqlalchemy.orm import Session
+
 from .. import model
 from . import schema as matricula_schema
 

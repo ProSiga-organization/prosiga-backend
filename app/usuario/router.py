@@ -1,15 +1,16 @@
 import csv
 import io
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from . import schema
-from .. import model
+
+from .. import deps, model
 from ..database import get_db
-from .repository import UsuarioRepository
-from .. import deps
 from ..matricula.repository import MatriculaRepository
 from ..relatorios import gerador_pdf
+from . import schema
+from .repository import UsuarioRepository
 
 router = APIRouter(prefix="/usuarios", tags=["Usuários"])
 

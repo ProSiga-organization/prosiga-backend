@@ -1,13 +1,15 @@
-import pytest
+from datetime import date
 from unittest.mock import MagicMock, patch
-from app.matricula.repository import MatriculaRepository
-from app import model
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+
+from app import deps, model
+from app.conftest import (mock_auth_aluno, mock_auth_coordenador,
+                          mock_auth_professor)
 from app.main import app
-from app import deps
-from app.conftest import mock_auth_aluno, mock_auth_professor, mock_auth_coordenador
-from datetime import date
+from app.matricula.repository import MatriculaRepository
 
 
 def test_calcular_ira_sem_disciplinas():

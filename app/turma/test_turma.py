@@ -1,10 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+
+from app import deps, model
+from app.conftest import (mock_auth_aluno, mock_auth_coordenador,
+                          mock_auth_professor)
 from app.main import app
-from app import deps
-from app import model
-from app.conftest import mock_auth_professor, mock_auth_aluno, mock_auth_coordenador
 
 
 def test_professor_cria_avaliacao_coluna(

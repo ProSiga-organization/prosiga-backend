@@ -1,7 +1,9 @@
+from typing import List, Optional
+
 from sqlalchemy.orm import Session, joinedload
+
 from .. import model
 from . import schema
-from typing import List, Optional
 
 
 class AvisoRepository:

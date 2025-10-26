@@ -1,19 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
-from typing import List
-from . import schema as turma_schema
-from ..usuario import schema as usuario_schema
-from .. import model
-from ..database import get_db
-from .repository import TurmaRepository
-from .. import deps
-from ..matricula.repository import MatriculaRepository
-from ..matricula import schema as matricula_schema
-from ..periodo_letivo.repository import PeriodoLetivoRepository
-from fastapi.responses import StreamingResponse
-import io
 import csv
+import io
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session, joinedload
+
+from .. import deps, model
+from ..database import get_db
+from ..matricula import schema as matricula_schema
+from ..matricula.repository import MatriculaRepository
+from ..periodo_letivo.repository import PeriodoLetivoRepository
 from ..relatorios import gerador_pdf
+from ..usuario import schema as usuario_schema
+from . import schema as turma_schema
+from .repository import TurmaRepository
 
 router = APIRouter(prefix="/turmas", tags=["Turmas"])
 
