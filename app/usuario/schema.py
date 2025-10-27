@@ -2,7 +2,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, EmailStr
 
-from ..model import StatusContaEnum
+from app.model import StatusContaEnum
 
 # Schemas para sistema de usuários
 

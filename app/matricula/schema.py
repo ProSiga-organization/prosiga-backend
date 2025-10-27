@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from ..model import StatusAprovacaoEnum
+from app.model import StatusAprovacaoEnum
 
 # Schemas para sistema de matrículas e notas
 

@@ -4,13 +4,13 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .. import deps, model
-from ..database import get_db
-from ..periodo_letivo.repository import PeriodoLetivoRepository
-from ..turma.repository import TurmaRepository
-from ..usuario.repository import UsuarioRepository
-from . import schema as matricula_schema
-from .repository import MatriculaRepository
+from app import deps, model
+from app.database import get_db
+from app.periodo_letivo.repository import PeriodoLetivoRepository
+from app.turma.repository import TurmaRepository
+from app.usuario.repository import UsuarioRepository
+from app.matricula import schema as matricula_schema
+from app.matricula.repository import MatriculaRepository
 
 # Define as rotas da API para matrículas
 router = APIRouter(prefix="/matriculas", tags=["Matrículas"])

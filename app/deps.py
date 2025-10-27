@@ -3,9 +3,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from . import model
-from .database import get_db
-from .usuario.repository import UsuarioRepository
+from app import model
+from app.database import get_db
+from app.usuario.repository import UsuarioRepository
 
 # URL do serviço de autenticação externo
 AUTH_SERVICE_URL = "http://auth-prosiga:8000/login/me"

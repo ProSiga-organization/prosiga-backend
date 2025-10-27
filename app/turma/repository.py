@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from .. import model
-from ..model import Disciplina
-from . import schema as turma_schema
+from app import model
+from app.model import Disciplina
+from app.turma import schema as turma_schema
 
 
 class TurmaRepository:

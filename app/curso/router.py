@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from .. import deps, model
-from ..database import get_db
-from ..relatorios import gerador_pdf
-from .repository import CursoRepository
+from app import deps, model
+from app.database import get_db
+from app.relatorios import gerador_pdf
+from app.curso.repository import CursoRepository
 
 # Define as rotas da API para cursos
 router = APIRouter(prefix="/cursos", tags=["Cursos"])

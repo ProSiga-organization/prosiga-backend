@@ -2,8 +2,8 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from .. import model
-from . import schema
+from app import model
+from app.aviso import schema
 
 
 class AvisoRepository:

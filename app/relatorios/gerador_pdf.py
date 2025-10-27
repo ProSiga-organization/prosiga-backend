@@ -9,8 +9,8 @@ from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
 from sqlalchemy.orm import Session
 
-from .. import model
-from ..matricula.repository import MatriculaRepository
+from app import model
+from app.matricula.repository import MatriculaRepository
 
 MARGEM_ESQUERDA = 1.5 * cm
 MARGEM_SUPERIOR = 2 * cm

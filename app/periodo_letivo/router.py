@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from .. import deps, model
-from ..database import get_db
-from ..relatorios import gerador_pdf
-from ..usuario.repository import UsuarioRepository
-from . import schema
-from .repository import PeriodoLetivoRepository
+from app import deps, model
+from app.database import get_db
+from app.relatorios import gerador_pdf
+from app.usuario.repository import UsuarioRepository
+from app.periodo_letivo import schema
+from app.periodo_letivo.repository import PeriodoLetivoRepository
 
 # Define as rotas da API para períodos letivos
 router = APIRouter(prefix="/periodos-letivos", tags=["Períodos Letivos"])

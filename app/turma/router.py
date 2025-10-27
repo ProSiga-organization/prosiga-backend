@@ -6,15 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
-from .. import deps, model
-from ..database import get_db
-from ..matricula import schema as matricula_schema
-from ..matricula.repository import MatriculaRepository
-from ..periodo_letivo.repository import PeriodoLetivoRepository
-from ..relatorios import gerador_pdf
-from ..usuario import schema as usuario_schema
-from . import schema as turma_schema
-from .repository import TurmaRepository
+from app import deps, model
+from app.database import get_db
+from app.matricula import schema as matricula_schema
+from app.matricula.repository import MatriculaRepository
+from app.periodo_letivo.repository import PeriodoLetivoRepository
+from app.relatorios import gerador_pdf
+from app.usuario import schema as usuario_schema
+from app.turma import schema as turma_schema
+from app.turma.repository import TurmaRepository
 
 # Define as rotas da API para turmas
 router = APIRouter(prefix="/turmas", tags=["Turmas"])

@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
-from .. import deps, model
-from ..database import get_db
-from ..matricula.repository import MatriculaRepository
-from ..relatorios import gerador_pdf
-from . import schema
-from .repository import UsuarioRepository
+from app import deps, model
+from app.database import get_db
+from app.matricula.repository import MatriculaRepository
+from app.relatorios import gerador_pdf
+from app.usuario import schema
+from app.usuario.repository import UsuarioRepository
 
 # Define as rotas da API para usuários
 router = APIRouter(prefix="/usuarios", tags=["Usuários"])

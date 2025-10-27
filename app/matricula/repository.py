@@ -1,8 +1,8 @@
 from sqlalchemy import distinct, tuple_
 from sqlalchemy.orm import Session
 
-from .. import model
-from . import schema as matricula_schema
+from app import model
+from app.matricula import schema as matricula_schema
 
 
 class MatriculaRepository:

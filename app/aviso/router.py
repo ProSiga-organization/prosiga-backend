@@ -3,11 +3,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .. import deps, model
-from ..database import get_db
-from ..turma.repository import TurmaRepository
-from . import schema
-from .repository import AvisoRepository
+from app import deps, model
+from app.database import get_db
+from app.turma.repository import TurmaRepository
+from app.aviso import schema
+from app.aviso.repository import AvisoRepository
 
 # Define as rotas da API para avisos
 router = APIRouter(prefix="/avisos", tags=["Avisos"])
