@@ -12,8 +12,10 @@ from ..usuario.repository import UsuarioRepository
 from . import schema as matricula_schema
 from .repository import MatriculaRepository
 
+# Define as rotas da API para matrículas
 router = APIRouter(prefix="/matriculas", tags=["Matrículas"])
 
+# Instâncias dos repositórios para operações no banco
 repo = MatriculaRepository()
 repo_turma = TurmaRepository()
 repo_usuario = UsuarioRepository()
@@ -32,6 +34,7 @@ def create_matricula(
     current_user: model.Usuario = Depends(deps.get_current_user),
 ):
     """(Aluno) Realiza a matrícula do aluno LOGADO em uma turma."""
+    # Verifica se o usuário é um aluno
     if not isinstance(current_user, model.Aluno):
         raise HTTPException(
             status_code=403, detail="Apenas alunos podem se matricular em turmas."
@@ -39,22 +42,26 @@ def create_matricula(
 
     id_aluno_logado = current_user.id
 
+    # Verifica se a turma existe
     turma = repo_turma.get_by_id(db, id=request.id_turma)
     if not turma:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
 
+    # Verifica se o aluno já está matriculado na turma
     matricula_existente = repo.get_by_aluno_and_turma(
         db, id_aluno=id_aluno_logado, id_turma=request.id_turma
     )
     if matricula_existente:
         raise HTTPException(status_code=409, detail="Aluno já matriculado nesta turma.")
 
+    # Verifica se há vagas disponíveis na turma
     matriculas_na_turma = repo.get_matriculas_by_turma(db, id_turma=request.id_turma)
     if len(matriculas_na_turma) >= turma.vagas:
         raise HTTPException(
             status_code=400, detail="Não há mais vagas disponíveis nesta turma."
         )
 
+    # Cria a nova matrícula
     dados_matricula = model.Matricula(
         id_aluno=id_aluno_logado, id_turma=request.id_turma
     )
@@ -73,6 +80,7 @@ def get_my_matriculas(
     current_aluno: model.Aluno = Depends(deps.get_current_aluno),
 ):
     """(Aluno) Retorna as matrículas do aluno autenticado (incluindo notas e avaliações)."""
+    # Busca todas as matrículas do aluno logado
     matriculas = repo.get_matriculas_by_aluno(db, id_aluno=current_aluno.id)
     if not matriculas:
         raise HTTPException(status_code=404, detail="Nenhuma matrícula encontrada.")
@@ -92,7 +100,7 @@ def trancar_disciplina(
     """
     (Aluno) Solicita o trancamento de uma disciplina (matrícula) em que está inscrito.
     """
-    # 1. Verifica se o aluno está matriculado na turma
+    # Verifica se o aluno está matriculado na turma
     matricula_db = repo.get_by_aluno_and_turma(
         db, id_aluno=current_aluno.id, id_turma=id_turma
     )

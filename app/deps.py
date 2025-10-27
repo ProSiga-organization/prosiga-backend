@@ -7,8 +7,13 @@ from . import model
 from .database import get_db
 from .usuario.repository import UsuarioRepository
 
+# URL do serviço de autenticação externo
 AUTH_SERVICE_URL = "http://auth-prosiga:8000/login/me"
+
+# Esquema de segurança para tokens Bearer
 security_scheme = HTTPBearer()
+
+# Repositório para operações com usuários
 repo = UsuarioRepository()
 
 
@@ -21,10 +26,12 @@ def get_current_user(
     e retorna o objeto completo do usuário a partir do banco de dados local.
     """
     try:
+        # Valida o token com o serviço de autenticação
         headers = {"Authorization": f"Bearer {token.credentials}"}
         response = requests.get(AUTH_SERVICE_URL, headers=headers, timeout=5.0)
         response.raise_for_status()
 
+        # Extrai o email do usuário da resposta
         user_data = response.json()
         email = user_data.get("email")
         if not email:

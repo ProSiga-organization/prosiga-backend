@@ -7,6 +7,7 @@ from . import schema
 
 
 class AvisoRepository:
+    """Classe responsável pelas operações de banco de dados para avisos"""
 
     def create_aviso_turma(
         self, db: Session, request: schema.AvisoTurmaCreate, id_autor: int
@@ -85,9 +86,9 @@ class AvisoRepository:
         """
         return (
             db.query(model.Aviso)
-            .options(joinedload(model.Aviso.autor))
+            .options(joinedload(model.Aviso.autor))  # Carrega o autor junto
             .filter(model.Aviso.id_turma == id_turma)
-            .order_by(model.Aviso.data_publicacao.desc())
+            .order_by(model.Aviso.data_publicacao.desc())  # Mais recentes primeiro
             .all()
         )
 
@@ -97,8 +98,8 @@ class AvisoRepository:
         """
         return (
             db.query(model.Aviso)
-            .options(joinedload(model.Aviso.autor))
+            .options(joinedload(model.Aviso.autor))  # Carrega o autor junto
             .filter(model.Aviso.id_curso == id_curso)
-            .order_by(model.Aviso.data_publicacao.desc())
+            .order_by(model.Aviso.data_publicacao.desc())  # Mais recentes primeiro
             .all()
         )

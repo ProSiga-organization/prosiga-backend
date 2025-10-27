@@ -4,8 +4,10 @@ from pydantic import BaseModel, EmailStr
 
 from ..model import StatusContaEnum
 
+# Schemas para sistema de usuários
 
 class PrimeiroAcessoSchema(BaseModel):
+    """Schema para ativação de conta no primeiro acesso"""
     cpf: str
     email: str
     senha: str
@@ -26,17 +28,21 @@ class UsuarioBaseResponse(BaseModel):
 
 
 class AlunoResponse(UsuarioBaseResponse):
+    """Schema de resposta específico para alunos"""
     matricula: str
 
 
 class ProfessorResponse(UsuarioBaseResponse):
+    """Schema de resposta específico para professores"""
     pass
 
 
 class CoordenadorResponse(UsuarioBaseResponse):
+    """Schema de resposta específico para coordenadores"""
     pass
 
 
+# União de todos os tipos de usuário para respostas polimórficas
 AnyUsuarioResponse = Union[AlunoResponse, ProfessorResponse, CoordenadorResponse]
 
 

@@ -7,8 +7,10 @@ from ..database import get_db
 from ..relatorios import gerador_pdf
 from .repository import CursoRepository
 
+# Define as rotas da API para cursos
 router = APIRouter(prefix="/cursos", tags=["Cursos"])
 
+# Instância do repositório para operações no banco
 repo = CursoRepository()
 
 
@@ -21,10 +23,12 @@ def get_relatorio_alunos_por_curso(
     (Coordenador) Gera e retorna um ficheiro PDF listando todos os alunos
     agrupados por curso.
     """
+    # Busca todos os cursos com alunos
     cursos = repo.get_all_with_alunos(db)
     if not cursos:
         raise HTTPException(status_code=404, detail="Nenhum curso encontrado.")
 
+    # Gera o PDF com os dados
     try:
         pdf_buffer = gerador_pdf.gerar_relatorio_alunos_curso_pdf(db=db, cursos=cursos)
     except Exception as e:
@@ -32,6 +36,7 @@ def get_relatorio_alunos_por_curso(
             status_code=500, detail=f"Erro ao gerar o PDF Alunos/Curso: {e}"
         )
 
+    # Configura o download do arquivo
     filename = "relatorio_alunos_por_curso.pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
 

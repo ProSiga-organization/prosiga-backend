@@ -9,8 +9,10 @@ from ..turma.repository import TurmaRepository
 from . import schema
 from .repository import AvisoRepository
 
+# Define as rotas da API para avisos
 router = APIRouter(prefix="/avisos", tags=["Avisos"])
 
+# Instâncias dos repositórios para operações no banco
 repo = AvisoRepository()
 repo_turma = TurmaRepository()
 
@@ -29,10 +31,12 @@ def create_aviso_para_turma(
     """
     (Professor) Cria um novo aviso e o associa a uma turma específica.
     """
+    # Verifica se a turma existe
     turma = repo_turma.get_by_id(db, id=request.id_turma)
     if not turma:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
 
+    # Verifica se o professor atual é dono da turma
     if turma.id_professor != current_professor.id:
         raise HTTPException(
             status_code=403, detail="Acesso negado: Você não é o professor desta turma."
@@ -113,15 +117,18 @@ def update_aviso(
     """
     (Autor) Atualiza o título ou conteúdo de um aviso que ele publicou.
     """
+    # Busca o aviso no banco
     aviso_db = repo.get_aviso_by_id(db, id_aviso=id_aviso)
     if not aviso_db:
         raise HTTPException(status_code=404, detail="Aviso não encontrado.")
 
+    # Verifica se o usuário atual é o autor do aviso
     if aviso_db.id_autor != current_user.id:
         raise HTTPException(
             status_code=403, detail="Acesso negado: Você não é o autor deste aviso."
         )
 
+    # Verifica se o usuário tem permissão para editar (Professor ou Coordenador)
     if not isinstance(current_user, (model.Professor, model.Coordenador)):
         raise HTTPException(
             status_code=403, detail="Acesso negado: Perfil não autorizado para edição."
@@ -143,15 +150,18 @@ def delete_aviso(
     """
     (Autor) Deleta um aviso que ele publicou.
     """
+    # Busca o aviso no banco
     aviso_db = repo.get_aviso_by_id(db, id_aviso=id_aviso)
     if not aviso_db:
         raise HTTPException(status_code=404, detail="Aviso não encontrado.")
 
+    # Verifica se o usuário atual é o autor do aviso
     if aviso_db.id_autor != current_user.id:
         raise HTTPException(
             status_code=403, detail="Acesso negado: Você não é o autor deste aviso."
         )
 
+    # Verifica se o usuário tem permissão para deletar (Professor ou Coordenador)
     if not isinstance(current_user, (model.Professor, model.Coordenador)):
         raise HTTPException(
             status_code=403, detail="Acesso negado: Perfil não autorizado para deleção."

@@ -6,6 +6,7 @@ from . import schema as matricula_schema
 
 
 class MatriculaRepository:
+    """Classe responsável pelas operações de banco de dados para matrículas"""
 
     def get_by_aluno_and_turma(
         self, db: Session, id_aluno: int, id_turma: int
@@ -36,16 +37,16 @@ class MatriculaRepository:
         """
         # 1. Adiciona a matrícula
         db.add(matricula)
-        db.flush()  # Para garantir que a matrícula exista antes de criar as notas
+        db.flush()  # Garante que a matrícula existe antes de criar as notas
 
-        # 2. Busca todas as "colunas" de avaliação já definidas para esta turma
+        # 2. Busca todas as avaliações já definidas para esta turma
         avaliacoes_da_turma = (
             db.query(model.AvaliacaoTurma)
             .filter(model.AvaliacaoTurma.id_turma == matricula.id_turma)
             .all()
         )
 
-        # 3. Cria "células" (NotaAvaliacao) vazias para este novo aluno
+        # 3. Cria células de nota vazias para cada avaliação existente
         notas_para_criar = []
         for avaliacao in avaliacoes_da_turma:
             notas_para_criar.append(
@@ -79,6 +80,7 @@ class MatriculaRepository:
         update_data: matricula_schema.MatriculaUpdate,
     ) -> model.Matricula:
         """Atualiza campos específicos da matrícula (nota_final, status)."""
+        # Atualiza apenas os campos enviados na requisição
         update_dict = update_data.model_dump(exclude_unset=True)
         for key, value in update_dict.items():
             setattr(matricula_db, key, value)
@@ -112,16 +114,16 @@ class MatriculaRepository:
         Cria ou atualiza a nota de um aluno em uma avaliação (a "célula").
         Recebe IDs puros validados pelo router.
         """
-        # Tenta encontrar a "célula"
+        # Busca se a nota já existe
         nota_db = self.get_nota_by_aluno_and_avaliacao(
             db, id_aluno=id_aluno, id_avaliacao_turma=id_avaliacao_turma
         )
 
         if nota_db:
-            # Se a célula existe, apenas atualiza a nota
+            # Atualiza nota existente
             nota_db.nota = nota
         else:
-            # Se não existe, cria a célula
+            # Cria nova entrada de nota
             nota_db = model.NotaAvaliacao(
                 nota=nota,
                 id_avaliacao_turma=id_avaliacao_turma,

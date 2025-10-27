@@ -12,8 +12,10 @@ from ..relatorios import gerador_pdf
 from . import schema
 from .repository import UsuarioRepository
 
+# Define as rotas da API para usuários
 router = APIRouter(prefix="/usuarios", tags=["Usuários"])
 
+# Instâncias dos repositórios para operações no banco
 repo = UsuarioRepository()
 repo_matricula = MatriculaRepository()
 
@@ -27,7 +29,8 @@ repo_matricula = MatriculaRepository()
 def primeiro_acesso_usuario(
     dados_ativacao: schema.PrimeiroAcessoSchema, db: Session = Depends(get_db)
 ):
-
+    """Ativa conta de usuário no primeiro acesso."""
+    # Busca usuário pendente de ativação
     usuario_db = repo.get_usuario_para_ativacao(db, cpf=dados_ativacao.cpf)
 
     if not usuario_db:
@@ -36,6 +39,7 @@ def primeiro_acesso_usuario(
             detail="CPF não encontrado ou conta já ativa. Verifique os dados ou contacte a administração.",
         )
 
+    # Ativa a conta do usuário
     usuario_ativado = repo.ativar_conta(
         db, usuario_db=usuario_db, dados_ativacao=dados_ativacao
     )

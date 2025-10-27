@@ -6,6 +6,7 @@ from . import schema
 
 
 class UsuarioRepository:
+    """Classe responsável pelas operações de banco de dados para usuários"""
 
     def get_by_cpf(self, db: Session, cpf: str) -> model.Usuario | None:
         """

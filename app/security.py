@@ -1,5 +1,6 @@
 from passlib.context import CryptContext
 
+# Contexto para criptografia de senhas usando bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

@@ -11,12 +11,15 @@ from app.conftest import (mock_auth_aluno, mock_auth_coordenador,
 from app.main import app
 from app.matricula.repository import MatriculaRepository
 
+# Testes para funcionalidades do módulo de matrículas
+
 
 def test_calcular_ira_sem_disciplinas():
     """
     Testa US-101: Cálculo de IRA para aluno sem histórico.
     O IRA deve ser 5.0 (o valor inicial).
     """
+    # Simula banco sem matrículas para o aluno
     mock_db = MagicMock()
 
     mock_query = MagicMock()
@@ -26,6 +29,7 @@ def test_calcular_ira_sem_disciplinas():
     repo = MatriculaRepository()
     id_aluno_teste = 1
 
+    # Calcula IRA e verifica valor padrão
     ira = repo.calcular_ira(db=mock_db, id_aluno=id_aluno_teste)
 
     assert ira == 5.0

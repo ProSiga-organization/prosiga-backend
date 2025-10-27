@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 
 class AvisoBase(BaseModel):
+    """Campos básicos compartilhados por todos os avisos"""
     titulo: str
     conteudo: Optional[str] = None
 

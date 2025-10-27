@@ -4,6 +4,7 @@ from .. import model
 
 
 class PeriodoLetivoRepository:
+    """Classe responsável pelas operações de banco de dados para períodos letivos"""
 
     def get_all(self, db: Session) -> list[model.PeriodoLetivo]:
         """Retorna todos os períodos letivos."""
@@ -20,9 +21,9 @@ class PeriodoLetivoRepository:
     ) -> model.PeriodoLetivo:
         """Salva um novo período letivo ou atualiza um existente."""
         if periodo_letivo.id:
-            db.merge(periodo_letivo)
+            db.merge(periodo_letivo)  # Atualiza existente
         else:
-            db.add(periodo_letivo)
+            db.add(periodo_letivo)  # Cria novo
         db.commit()
         return periodo_letivo
 
@@ -39,6 +40,6 @@ class PeriodoLetivoRepository:
             db.query(model.PeriodoLetivo)
             .order_by(
                 model.PeriodoLetivo.ano.desc(), model.PeriodoLetivo.semestre.desc()
-            )
+            )  # Ordena por ano e semestre decrescente
             .first()
         )

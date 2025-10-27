@@ -16,8 +16,10 @@ from ..usuario import schema as usuario_schema
 from . import schema as turma_schema
 from .repository import TurmaRepository
 
+# Define as rotas da API para turmas
 router = APIRouter(prefix="/turmas", tags=["Turmas"])
 
+# Instâncias dos repositórios para operações no banco
 repo = TurmaRepository()
 repo_matricula = MatriculaRepository()
 repo_periodo = PeriodoLetivoRepository()
@@ -31,6 +33,8 @@ def create_turma(
     db: Session = Depends(get_db),
     current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
 ):
+    """Cria uma nova turma."""
+    # Cria a turma no banco de dados
     turma = repo.save(db, model.Turma(**request.model_dump()))
     return turma
 

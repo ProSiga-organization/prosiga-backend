@@ -4,8 +4,10 @@ from pydantic import BaseModel
 
 from ..model import StatusAprovacaoEnum
 
+# Schemas para sistema de matrículas e notas
 
 class NotaAvaliacaoBase(BaseModel):
+    """Campos básicos para notas de avaliação"""
     nota: Optional[float] = None
 
 
@@ -26,6 +28,7 @@ class NotaAvaliacaoCreateUpdate(NotaAvaliacaoBase):
 
 
 class MatriculaCreate(BaseModel):
+    """Schema para aluno se matricular em uma turma"""
     id_turma: int
 
 
@@ -37,12 +40,13 @@ class MatriculaUpdate(BaseModel):
 
 
 class MatriculaResponse(BaseModel):
+    """Schema de resposta completo para uma matrícula"""
     id_aluno: int
     id_turma: int
     status: Optional[StatusAprovacaoEnum] = None
     nota_final: Optional[float] = None
 
-    notas_avaliacoes: List[NotaAvaliacaoResponse] = []
+    notas_avaliacoes: List[NotaAvaliacaoResponse] = []  # Lista de notas nas avaliações
 
     class Config:
         from_attributes = True

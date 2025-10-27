@@ -6,6 +6,7 @@ from . import schema as turma_schema
 
 
 class TurmaRepository:
+    """Classe responsável pelas operações de banco de dados para turmas"""
 
     def get_all(
         self,
@@ -75,17 +76,17 @@ class TurmaRepository:
         IMPORTANTE: Também cria as "células" (NotaAvaliacao) vazias
         para todos os alunos já matriculados.
         """
-        # 1. Cria a "coluna"
+        # 1. Cria a nova avaliação (coluna)
         nova_avaliacao = model.AvaliacaoTurma(nome=request.nome, id_turma=id_turma)
         db.add(nova_avaliacao)
-        db.flush()
+        db.flush()  # Garante que o ID seja gerado
 
-        # 2. Encontra todos os alunos já matriculados na turma
+        # 2. Busca alunos já matriculados na turma
         matriculas_da_turma = (
             db.query(model.Matricula).filter(model.Matricula.id_turma == id_turma).all()
         )
 
-        # 3. Cria as "células" (NotaAvaliacao) vazias para cada aluno
+        # 3. Cria células de nota vazias para cada aluno matriculado
         notas_para_criar = []
         for matricula in matriculas_da_turma:
             notas_para_criar.append(

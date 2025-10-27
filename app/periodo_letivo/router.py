@@ -11,8 +11,10 @@ from ..usuario.repository import UsuarioRepository
 from . import schema
 from .repository import PeriodoLetivoRepository
 
+# Define as rotas da API para períodos letivos
 router = APIRouter(prefix="/periodos-letivos", tags=["Períodos Letivos"])
 
+# Instâncias dos repositórios para operações no banco
 repo = PeriodoLetivoRepository()
 repo_usuario = UsuarioRepository()
 
@@ -28,6 +30,7 @@ def create_periodo_letivo(
     current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
 ):
     """Cria um novo período letivo."""
+    # Cria o período letivo no banco
     periodo = repo.save(db, model.PeriodoLetivo(**request.model_dump()))
     return periodo
 
@@ -41,6 +44,7 @@ def get_all_periodos_letivos(db: Session = Depends(get_db)):
 @router.get("/{id}", response_model=schema.PeriodoLetivoResponse)
 def get_periodo_letivo_by_id(id: int, db: Session = Depends(get_db)):
     """Busca um período letivo pelo seu ID."""
+    # Busca o período letivo no banco
     periodo = repo.get_by_id(db, id)
     if not periodo:
         raise HTTPException(status_code=404, detail="Período letivo não encontrado.")
