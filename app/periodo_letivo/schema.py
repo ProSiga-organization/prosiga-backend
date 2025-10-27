@@ -4,8 +4,10 @@ from pydantic import BaseModel
 
 # Schemas para sistema de períodos letivos
 
+
 class PeriodoLetivoBase(BaseModel):
     """Campos básicos para períodos letivos"""
+
     ano: int
     semestre: int
     inicio_matricula: date
@@ -15,6 +17,7 @@ class PeriodoLetivoBase(BaseModel):
 
 class PeriodoLetivoCreate(PeriodoLetivoBase):
     """Schema para criação de períodos letivos"""
+
     pass
 
 

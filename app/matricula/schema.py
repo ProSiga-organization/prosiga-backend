@@ -6,8 +6,10 @@ from ..model import StatusAprovacaoEnum
 
 # Schemas para sistema de matrículas e notas
 
+
 class NotaAvaliacaoBase(BaseModel):
     """Campos básicos para notas de avaliação"""
+
     nota: Optional[float] = None
 
 
@@ -29,6 +31,7 @@ class NotaAvaliacaoCreateUpdate(NotaAvaliacaoBase):
 
 class MatriculaCreate(BaseModel):
     """Schema para aluno se matricular em uma turma"""
+
     id_turma: int
 
 
@@ -41,6 +44,7 @@ class MatriculaUpdate(BaseModel):
 
 class MatriculaResponse(BaseModel):
     """Schema de resposta completo para uma matrícula"""
+
     id_aluno: int
     id_turma: int
     status: Optional[StatusAprovacaoEnum] = None

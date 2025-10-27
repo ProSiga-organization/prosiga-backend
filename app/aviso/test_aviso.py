@@ -112,7 +112,7 @@ def test_aluno_le_avisos(
     data_turma = response_turma.json()
     assert len(data_turma) == 1
     assert data_turma[0]["titulo"] == "Aviso T1"
-    
+
     # Testa leitura de avisos do curso
     response_curso = client.get(f"/avisos/curso/{id_curso}")
     assert response_curso.status_code == 200

@@ -163,7 +163,8 @@ class Aviso(Base):
     titulo: str = Column(String(255), nullable=False)
     conteudo: str = Column(Text, nullable=True)
     data_publicacao: DateTime = Column(
-        DateTime(timezone=True), server_default=func.now()  # pylint: disable=not-callable
+        DateTime(timezone=True),
+        server_default=func.now(),  # pylint: disable=not-callable
     )
     id_autor: int = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     id_turma: int = Column(Integer, ForeignKey("turmas.id"), nullable=True)
