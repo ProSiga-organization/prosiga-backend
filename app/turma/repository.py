@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app import model
-from app.model import Disciplina
 from app.turma import schema as turma_schema
 
 

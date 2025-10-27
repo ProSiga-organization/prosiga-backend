@@ -170,7 +170,7 @@ def upload_usuarios_csv(
         db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Ocorreu um erro ao processar o ficheiro: {e}"
-        )
+        ) from e
 
 
 # --- ENDPOINT PARA DESATIVAR CONTA (ADMIN/COORDENADOR) ---
@@ -234,7 +234,7 @@ def get_historico_pdf(
             ira=ira,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}") from e
 
     filename = f"historico_{current_aluno.matricula}.pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}
@@ -279,7 +279,7 @@ def get_historico_aluno_admin(
             aluno=aluno, matriculas=matriculas, semestre_atual=semestre_atual, ira=ira
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o PDF: {e}") from e
 
     filename = f"historico_{aluno.matricula}.pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}

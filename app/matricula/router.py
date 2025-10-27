@@ -285,4 +285,4 @@ def create_or_update_nota_celula(
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar a nota: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar a nota: {e}") from e

@@ -470,7 +470,7 @@ def exportar_diario_pdf(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Erro ao gerar o PDF do diário: {e}"
-        )
+        ) from e
 
     filename = f"diario_classe_{turma.codigo}.pdf"
     headers = {"Content-Disposition": f"attachment; filename={filename}"}

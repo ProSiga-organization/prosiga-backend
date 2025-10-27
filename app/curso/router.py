@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ def get_relatorio_alunos_por_curso(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Erro ao gerar o PDF Alunos/Curso: {e}"
-        )
+        ) from e
 
     # Configura o download do arquivo
     filename = "relatorio_alunos_por_curso.pdf"

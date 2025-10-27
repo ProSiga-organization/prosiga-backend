@@ -131,7 +131,7 @@ def test_upload_csv_erro_curso_invalido(
         mock_coordenador
     )
 
-    csv_content = "cpf,nome,matricula,tipo_usuario,codigo_curso\n55533344401,Aluno Curso Ruim,2025-CSV2,aluno,INVALIDO\n"
+    csv_content = "cpf,nome,matricula,tipo_usuario,codigo_curso\n55533344401,Aluno Fake,2025-CSV2,aluno,INVALIDO\n"
     csv_file = io.BytesIO(csv_content.encode("utf-8"))
     csv_file.seek(0)
 

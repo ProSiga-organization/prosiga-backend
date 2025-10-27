@@ -81,7 +81,7 @@ def test_create_periodo_letivo_sem_permissao(
     app.dependency_overrides.pop(deps.get_current_coordenador, None)
     headers = {}
 
-    if perfil == "aluno" or perfil == "professor":
+    if perfil in ("aluno", "professor"):
         mock_user = request.getfixturevalue(mock_user_fixture)
 
         def mock_get_current_user():
