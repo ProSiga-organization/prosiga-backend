@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # Importa os roteadores de cada módulo
 from app.aviso.router import router as aviso_router
@@ -14,6 +15,19 @@ Base.metadata.create_all(bind=engine)
 
 # Inicializa a aplicação FastAPI
 app = FastAPI(title="PróSiga API", description="API do PróSiga.")
+
+origins = [
+    "http://localhost:3000",
+]
+
+# Adiciona o Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Registra todos os roteadores
 app.include_router(usuario_router)
