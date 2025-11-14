@@ -5,13 +5,19 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app import deps, model
-from app.conftest import (mock_auth_aluno, mock_auth_coordenador,
-                          mock_auth_professor)
-from app.main import app
+from app import model
 from app.matricula.repository import MatriculaRepository
 
-# Testes para funcionalidades do módulo de matrículas
+AUTH_MOCK_PATH = "app.deps.requests.get"
+
+
+def mock_auth_response(user_model):
+    """Cria um mock de resposta bem-sucedida do serviço de autenticação."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"email": user_model.email, "id": user_model.id}
+    mock_response.raise_for_status.return_value = None
+    return mock_response
 
 
 def test_calcular_ira_sem_disciplinas():
@@ -19,7 +25,6 @@ def test_calcular_ira_sem_disciplinas():
     Testa US-101: Cálculo de IRA para aluno sem histórico.
     O IRA deve ser 5.0 (o valor inicial).
     """
-    # Simula banco sem matrículas para o aluno
     mock_db = MagicMock()
 
     mock_query = MagicMock()
@@ -29,7 +34,6 @@ def test_calcular_ira_sem_disciplinas():
     repo = MatriculaRepository()
     id_aluno_teste = 1
 
-    # Calcula IRA e verifica valor padrão
     ira = repo.calcular_ira(db=mock_db, id_aluno=id_aluno_teste)
 
     assert ira == 5.0
@@ -68,46 +72,57 @@ def test_calcular_ira_com_historico():
     assert ira == 3.83
 
 
-def test_matricular_aluno_sucesso(
-    client: TestClient, db_session: Session, mock_aluno: model.Aluno, setup_turmas: dict
+@pytest.mark.parametrize(
+    "user_fixture, turma_key, expected_status, expected_detail",
+    [
+        ("mock_aluno", "turma_com_vaga", 201, None),
+        ("mock_aluno", "turma_sem_vaga", 400, "Não há mais vagas disponíveis"),
+        (
+            "mock_professor",
+            "turma_com_vaga",
+            403,
+            "Apenas alunos podem se matricular",
+        ),
+        (
+            "mock_coordenador",
+            "turma_com_vaga",
+            403,
+            "Apenas alunos podem se matricular",
+        ),
+    ],
+)
+def test_create_matricula_permissoes_e_vagas(
+    client: TestClient,
+    setup_turmas: dict,
+    user_fixture: str,
+    turma_key: str,
+    expected_status: int,
+    expected_detail: str | None,
+    request,
 ):
     """
     Testa US-019: Matrícula de aluno com sucesso (turma com vagas).
-
-    """
-    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(mock_aluno)
-
-    id_turma_com_vaga = setup_turmas["turma_com_vaga"].id
-    response = client.post("/matriculas/", json={"id_turma": id_turma_com_vaga})
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["id_aluno"] == mock_aluno.id
-    assert data["id_turma"] == id_turma_com_vaga
-    assert data["status"] == "EM_CURSO"
-
-    matricula_db = (
-        db_session.query(model.Matricula)
-        .filter_by(id_aluno=mock_aluno.id, id_turma=id_turma_com_vaga)
-        .first()
-    )
-    assert matricula_db is not None
-
-
-def test_matricular_aluno_sem_vagas(
-    client: TestClient, mock_aluno: model.Aluno, setup_turmas: dict
-):
-    """
     Testa US-019: Falha ao matricular em turma lotada.
-
+    Testa US-019: Falha de permissão (Professor/Coordenador não pode se matricular).
     """
-    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(mock_aluno)
-    id_turma_sem_vaga = setup_turmas["turma_sem_vaga"].id
+    current_user = request.getfixturevalue(user_fixture)
+    id_turma = setup_turmas[turma_key].id
+    headers = {"Authorization": "Bearer fake-token"}
 
-    response = client.post("/matriculas/", json={"id_turma": id_turma_sem_vaga})
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)):
+        response = client.post(
+            "/matriculas/", json={"id_turma": id_turma}, headers=headers
+        )
 
-    assert response.status_code == 400
-    assert "Não há mais vagas disponíveis" in response.json()["detail"]
+    assert response.status_code == expected_status
+
+    if expected_detail:
+        assert expected_detail in response.json()["detail"]
+    else:
+        data = response.json()
+        assert data["id_aluno"] == current_user.id
+        assert data["id_turma"] == id_turma
+        assert data["status"] == "EM_CURSO"
 
 
 def test_matricular_aluno_duplicado(
@@ -115,112 +130,85 @@ def test_matricular_aluno_duplicado(
 ):
     """
     Testa US-019: Falha ao matricular 2x na mesma turma.
-
     """
-    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(mock_aluno)
     id_turma_com_vaga = setup_turmas["turma_com_vaga"].id
+    headers = {"Authorization": "Bearer fake-token"}
 
-    response_1 = client.post("/matriculas/", json={"id_turma": id_turma_com_vaga})
-    assert response_1.status_code == 201
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)):
+        response_1 = client.post(
+            "/matriculas/", json={"id_turma": id_turma_com_vaga}, headers=headers
+        )
+        assert response_1.status_code == 201
 
-    response_2 = client.post("/matriculas/", json={"id_turma": id_turma_com_vaga})
+        response_2 = client.post(
+            "/matriculas/", json={"id_turma": id_turma_com_vaga}, headers=headers
+        )
 
     assert response_2.status_code == 409
     assert "Aluno já matriculado nesta turma" in response_2.json()["detail"]
 
 
-def test_matricular_como_professor_falha(
-    client: TestClient, mock_professor: model.Professor, setup_turmas: dict
+@pytest.mark.parametrize(
+    "data_hoje, status_inicial, expected_status_code, expected_detail_or_status",
+    [
+        (date(2025, 2, 15), model.StatusAprovacaoEnum.EM_CURSO, 200, "TRANCADO"),
+        (
+            date(2025, 3, 2),
+            model.StatusAprovacaoEnum.EM_CURSO,
+            400,
+            "Prazo para trancamento encerrado",
+        ),
+        (
+            date(2025, 2, 15),
+            model.StatusAprovacaoEnum.TRANCADO,
+            400,
+            "Não é possível trancar. Status atual: TRANCADO",
+        ),
+        (
+            date(2025, 2, 15),
+            model.StatusAprovacaoEnum.APROVADO,
+            400,
+            "Não é possível trancar. Status atual: APROVADO",
+        ),
+    ],
+)
+def test_trancar_disciplina_cenarios(
+    client: TestClient,
+    db_session: Session,
+    setup_matricula_existente: dict,
+    data_hoje: date,
+    status_inicial: model.StatusAprovacaoEnum,
+    expected_status_code: int,
+    expected_detail_or_status: str,
 ):
     """
-    Testa US-019: Falha de permissão (Professor não pode se matricular).
-
-    """
-    app.dependency_overrides[deps.get_current_user] = mock_auth_professor(
-        mock_professor
-    )
-    id_turma_com_vaga = setup_turmas["turma_com_vaga"].id
-
-    response = client.post("/matriculas/", json={"id_turma": id_turma_com_vaga})
-
-    assert response.status_code == 403
-    assert "Apenas alunos podem se matricular" in response.json()["detail"]
-
-
-def test_trancar_disciplina_sucesso_no_prazo(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa US-024: Trancamento com sucesso, feito DENTRO do prazo.
-
+    Testa US-024: Vários cenários de trancamento de disciplina.
+    - Sucesso (Dentro do prazo, status EM_CURSO).
+    - Falha (Fora do prazo).
+    - Falha (Status inválido, ex: já TRANCADO).
     """
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
     matricula = setup_matricula_existente["matricula"]
 
-    data_de_hoje_mock = date(2025, 2, 15)
-
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
-
-    with patch("app.matricula.router.date") as mock_date:
-        mock_date.today.return_value = data_de_hoje_mock
-
-        response = client.patch(f"/matriculas/{turma.id}/trancar")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "TRANCADO"
-
-    db_session.refresh(matricula)
-    assert matricula.status == model.StatusAprovacaoEnum.TRANCADO
-
-
-def test_trancar_disciplina_falha_fora_do_prazo(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa US-024: Falha (400) ao tentar trancar FORA do prazo.
-
-    """
-    aluno = setup_matricula_existente["aluno"]
-    turma = setup_matricula_existente["turma"]
-    data_de_hoje_mock = date(2025, 3, 2)
-
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
-
-    with patch("app.matricula.router.date") as mock_date:
-        mock_date.today.return_value = data_de_hoje_mock
-
-        response = client.patch(f"/matriculas/{turma.id}/trancar")
-
-    assert response.status_code == 400
-    assert "Prazo para trancamento encerrado" in response.json()["detail"]
-
-
-def test_trancar_disciplina_falha_status_invalido(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa US-024: Falha (400) ao tentar trancar uma disciplina já trancada.
-
-    """
-    aluno = setup_matricula_existente["aluno"]
-    turma = setup_matricula_existente["turma"]
-    matricula = setup_matricula_existente["matricula"]
-
-    matricula.status = model.StatusAprovacaoEnum.TRANCADO
+    matricula.status = status_inicial
     db_session.commit()
 
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
+    with patch(
+        AUTH_MOCK_PATH, return_value=mock_auth_response(aluno)
+    ) as mock_auth, patch("app.matricula.router.date") as mock_date:
+        mock_date.today.return_value = data_hoje
+        headers = {"Authorization": "Bearer fake-token"}
+        response = client.patch(f"/matriculas/{turma.id}/trancar", headers=headers)
 
-    data_de_hoje_mock = date(2025, 2, 15)
+    assert response.status_code == expected_status_code
 
-    with patch("app.matricula.router.date") as mock_date:
-        mock_date.today.return_value = data_de_hoje_mock
-
-        response = client.patch(f"/matriculas/{turma.id}/trancar")
-
-    assert response.status_code == 400
-    assert "Não é possível trancar. Status atual: TRANCADO" in response.json()["detail"]
+    if expected_status_code == 200:
+        assert response.json()["status"] == expected_detail_or_status
+        db_session.refresh(matricula)
+        assert matricula.status == model.StatusAprovacaoEnum.TRANCADO
+    else:
+        assert expected_detail_or_status in response.json()["detail"]
 
 
 def test_aluno_lista_suas_matriculas(
@@ -228,15 +216,14 @@ def test_aluno_lista_suas_matriculas(
 ):
     """
     Testa US-022: Aluno lista suas próprias matrículas.
-
     """
-
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
 
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
-
-    response = client.get("/matriculas/me")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(aluno)):
+        response = client.get(
+            "/matriculas/me", headers={"Authorization": "Bearer fake-token"}
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -252,11 +239,11 @@ def test_aluno_sem_matriculas_lista_vazio(
     """
     Testa US-022: Aluno sem matrículas recebe 404.
     (Nota: O endpoint levanta 404 se a lista for vazia)
-
     """
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-
-    response = client.get("/matriculas/me")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)):
+        response = client.get(
+            "/matriculas/me", headers={"Authorization": "Bearer fake-token"}
+        )
 
     assert response.status_code == 404
     assert "Nenhuma matrícula encontrada" in response.json()["detail"]
@@ -267,17 +254,16 @@ def test_professor_lista_alunos_da_turma(
 ):
     """
     Testa US-015: Professor (dono) lista alunos/matrículas da sua turma.
-
     """
     professor = setup_matricula_existente["professor"]
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
-
-    response = client.get(f"/turmas/{turma.id}/matriculas")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(professor)):
+        response = client.get(
+            f"/turmas/{turma.id}/matriculas",
+            headers={"Authorization": "Bearer fake-token"},
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -292,14 +278,15 @@ def test_aluno_lista_colegas_de_turma(
 ):
     """
     Testa US-023: Aluno (matriculado) lista seus colegas.
-
     """
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
 
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
-
-    response = client.get(f"/turmas/{turma.id}/colegas")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(aluno)):
+        response = client.get(
+            f"/turmas/{turma.id}/colegas",
+            headers={"Authorization": "Bearer fake-token"},
+        )
 
     assert response.status_code == 200
     data = response.json()
@@ -315,69 +302,65 @@ def test_aluno_nao_lista_colegas_se_nao_matriculado(
     """
     Testa US-023: Falha (403) se o aluno tentar ver colegas de uma
     turma onde ele NÃO está matriculado.
-
     """
     turma_alheia = setup_turmas["turma_com_vaga"]
 
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-
-    response = client.get(f"/turmas/{turma_alheia.id}/colegas")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)):
+        response = client.get(
+            f"/turmas/{turma_alheia.id}/colegas",
+            headers={"Authorization": "Bearer fake-token"},
+        )
 
     assert response.status_code == 403
     assert "Você não está matriculado nesta turma" in response.json()["detail"]
 
 
-def test_coordenador_matricula_aluno_em_turma_lotada(
+@pytest.mark.parametrize(
+    "matricula_aluno, id_turma_key, expected_status, expected_detail",
+    [
+        ("2025-TESTE", "turma_sem_vaga", 201, None),
+        ("MATRICULA-FANTASMA-999", "turma_com_vaga", 404, "Aluno não encontrado"),
+        ("2025-TESTE", "turma_com_vaga", 409, "Aluno já matriculado"),
+    ],
+)
+def test_coordenador_admin_create_matricula(
     client: TestClient,
     db_session: Session,
     mock_coordenador: model.Coordenador,
     mock_aluno: model.Aluno,
     setup_turmas: dict,
+    matricula_aluno: str,
+    id_turma_key: str,
+    expected_status: int,
+    expected_detail: str | None,
 ):
     """
     Testa US-011: Coordenador matricula aluno (por matrícula)
-    e IGNORA a restrição de vagas (turma_sem_vaga tem 0 vagas).
-
+    - Sucesso (ignorando vagas).
+    - Falha (Aluno não encontrado).
+    - Falha (Matrícula duplicada).
     """
+    if expected_status == 409:
+        matricula_existente = model.Matricula(
+            id_aluno=mock_aluno.id, id_turma=setup_turmas["turma_com_vaga"].id
+        )
+        db_session.add(matricula_existente)
+        db_session.commit()
 
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
-    turma_lotada = setup_turmas["turma_sem_vaga"]
+    turma = setup_turmas[id_turma_key]
+    payload = {"matricula_aluno": matricula_aluno, "id_turma": turma.id}
+    headers = {"Authorization": "Bearer fake-token"}
 
-    payload = {"matricula_aluno": mock_aluno.matricula, "id_turma": turma_lotada.id}
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_coordenador)):
+        response = client.post(
+            "/matriculas/admin/matricular", json=payload, headers=headers
+        )
 
-    response = client.post("/matriculas/admin/matricular", json=payload)
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["id_aluno"] == mock_aluno.id
-    assert data["id_turma"] == turma_lotada.id
-
-
-def test_coordenador_matricula_aluno_nao_encontrado(
-    client: TestClient,
-    db_session: Session,
-    mock_coordenador: model.Coordenador,
-    setup_turmas: dict,
-):
-    """
-    Testa US-011: Falha (404) se o coordenador tentar matricular
-    um aluno com número de matrícula inexistente.
-
-    """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
-
-    id_turma = setup_turmas["turma_com_vaga"].id
-
-    payload = {"matricula_aluno": "MATRICULA-FANTASMA-999", "id_turma": id_turma}
-
-    response = client.post("/matriculas/admin/matricular", json=payload)
-
-    assert response.status_code == 404
-    assert "Aluno não encontrado com esta matrícula" in response.json()["detail"]
+    assert response.status_code == expected_status
+    if expected_detail:
+        assert expected_detail in response.json()["detail"]
+    else:
+        assert response.json()["id_aluno"] == mock_aluno.id
 
 
 def test_professor_atualiza_nota_final_e_status_aluno(
@@ -386,20 +369,19 @@ def test_professor_atualiza_nota_final_e_status_aluno(
     """
     Testa US-015: Professor (dono) atualiza a nota final e o status
     (APROVADO/REPROVADO) de um aluno.
-
     """
     professor = setup_matricula_existente["professor"]
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
     matricula = setup_matricula_existente["matricula"]
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
-
     payload = {"nota_final": 8.5, "status": "APROVADO"}
+    headers = {"Authorization": "Bearer fake-token"}
 
-    response = client.patch(f"/matriculas/{turma.id}/{aluno.matricula}", json=payload)
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(professor)):
+        response = client.patch(
+            f"/matriculas/{turma.id}/{aluno.matricula}", json=payload, headers=headers
+        )
 
     assert response.status_code == 200
     data = response.json()

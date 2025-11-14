@@ -1,8 +1,7 @@
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, engine
-from app.model import (Aluno, Coordenador, Curso, Disciplina, Professor,
-                       StatusContaEnum)
+from app.model import Aluno, Coordenador, Curso, Disciplina, Professor, StatusContaEnum
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

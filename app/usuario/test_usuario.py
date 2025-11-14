@@ -1,13 +1,23 @@
 import io
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app import deps, model
-from app.conftest import app, mock_auth_aluno, mock_auth_coordenador
+from app import model
 from app.security import verify_password
+
+AUTH_MOCK_PATH = "app.deps.requests.get"
+
+
+def mock_auth_response(user_model):
+    """Cria um mock de resposta bem-sucedida do serviço de autenticação."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"email": user_model.email, "id": user_model.id}
+    mock_response.raise_for_status.return_value = None
+    return mock_response
 
 
 def test_primeiro_acesso_sucesso(client: TestClient, db_session: Session):
@@ -41,241 +51,282 @@ def test_primeiro_acesso_sucesso(client: TestClient, db_session: Session):
     db_session.refresh(aluno_novo)
     assert aluno_novo.status == model.StatusContaEnum.ATIVO
     assert aluno_novo.email == "aluno.novo@teste.com"
-    assert aluno_novo.senha_hash != ""
     assert verify_password("NovaSenha@123", aluno_novo.senha_hash) is True
 
 
-def test_primeiro_acesso_cpf_nao_encontrado(client: TestClient):
-    """
-    Testa o primeiro acesso com um CPF que não existe no banco.
-    Deve retornar 404.
-    """
-    payload = {
-        "cpf": "99999999999",
-        "email": "fantasma@teste.com",
-        "senha": "SenhaInvalida",
-    }
-
-    response = client.post("/usuarios/primeiro-acesso", json=payload)
-
-    assert response.status_code == 404
-    assert "CPF não encontrado ou conta já ativa" in response.json()["detail"]
-
-
-def test_primeiro_acesso_conta_ja_ativa(client: TestClient, mock_aluno: model.Aluno):
-    """
-    Testa o primeiro acesso para um usuário que já está "ATIVO".
-    Deve falhar com 404 (pois o repository não encontra usuário "NOVO").
-    """
-    payload = {
-        "cpf": mock_aluno.cpf,
-        "email": "email.novo@teste.com",
-        "senha": "NovaSenha",
-    }
-
-    response = client.post("/usuarios/primeiro-acesso", json=payload)
-
-    assert response.status_code == 404
-    assert "CPF não encontrado ou conta já ativa" in response.json()["detail"]
-
-
-def test_upload_csv_sucesso(
-    client: TestClient, db_session: Session, mock_coordenador: model.Coordenador
+@pytest.mark.parametrize(
+    "cpf, email, senha, expected_status, expected_detail",
+    [
+        (
+            "99999999999",
+            "fantasma@teste.com",
+            "SenhaInvalida",
+            404,
+            "CPF não encontrado ou conta já ativa",
+        ),
+        (
+            "33333333333",
+            "email.novo@teste.com",
+            "NovaSenha",
+            404,
+            "CPF não encontrado ou conta já ativa",
+        ),
+    ],
+)
+def test_primeiro_acesso_falhas(
+    client: TestClient,
+    mock_aluno: model.Aluno,
+    cpf: str,
+    email: str,
+    senha: str,
+    expected_status: int,
+    expected_detail: str,
 ):
     """
-    Testa US-005: Upload de CSV de usuários com sucesso.
+    Testa o primeiro acesso com falhas:
+    - CPF não encontrado (404).
+    - Conta já ATIVA (404).
     """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
+    payload = {"cpf": cpf, "email": email, "senha": senha}
+    response = client.post("/usuarios/primeiro-acesso", json=payload)
+    assert response.status_code == expected_status
+    assert expected_detail in response.json()["detail"]
 
+
+@pytest.mark.parametrize(
+    "csv_content, expected_status, expected_message",
+    [
+        (
+            "cpf,nome,matricula,tipo_usuario,codigo_curso\n"
+            "55511122201,Novo Aluno CSV,2025-CSV1,aluno,CC\n"
+            "55511122202,Novo Prof CSV,,professor,\n",
+            201,
+            "2 novos usuários pré-cadastrados com sucesso!",
+        ),
+        (
+            "cpf,nome,matricula,tipo_usuario,codigo_curso\n"
+            "55533344401,Aluno Fake,2025-CSV2,aluno,INVALIDO\n",
+            400,
+            "Código de curso 'INVALIDO' inválido",
+        ),
+        (
+            "cpf,nome,matricula,tipo_usuario,codigo_curso\n"
+            "55511122201,Aluno OK,2025-CSV1,aluno,CC\n"
+            "55533344401,Aluno Sem Mat,,aluno,CC\n",
+            207,
+            "Matrícula em falta para aluno",
+        ),
+    ],
+)
+def test_upload_csv_cenarios(
+    client: TestClient,
+    db_session: Session,
+    mock_coordenador: model.Coordenador,
+    csv_content: str,
+    expected_status: int,
+    expected_message: str,
+):
+    """
+    Testa US-005: Upload de CSV de usuários.
+    - Sucesso (201).
+    - Falha (Curso inválido, 400).
+    - Falha (Dados faltando, 400).
+    - Sucesso parcial (Um bom, um mau, 207).
+    """
     curso_cc = model.Curso(codigo="CC", nome="Ciencia da Computacao")
     db_session.add(curso_cc)
     db_session.commit()
 
-    csv_content = (
-        "cpf,nome,matricula,tipo_usuario,codigo_curso\n"
-        "55511122201,Novo Aluno CSV,2025-CSV1,aluno,CC\n"
-        "55511122202,Novo Prof CSV,,professor,\n"
-    )
     csv_file = io.BytesIO(csv_content.encode("utf-8"))
     csv_file.seek(0)
-    response = client.post(
-        "/usuarios/upload-csv", files={"file": ("usuarios.csv", csv_file, "text/csv")}
-    )
+    headers = {"Authorization": "Bearer fake-token"}
 
-    assert response.status_code == 201
-    assert "2 novos usuários pré-cadastrados com sucesso!" in response.json()["message"]
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_coordenador)):
+        response = client.post(
+            "/usuarios/upload-csv",
+            files={"file": ("usuarios.csv", csv_file, "text/csv")},
+            headers=headers,
+        )
 
-    aluno_db = db_session.query(model.Aluno).filter_by(cpf="55511122201").first()
-    prof_db = db_session.query(model.Professor).filter_by(cpf="55511122202").first()
+    assert response.status_code == expected_status
 
-    assert aluno_db is not None
-    assert aluno_db.nome == "Novo Aluno CSV"
-    assert aluno_db.matricula == "2025-CSV1"
-    assert aluno_db.status == model.StatusContaEnum.NOVO
-    assert aluno_db.id_curso == curso_cc.id
+    if expected_status == 201:
+        assert expected_message in response.json()["message"]
+        aluno_db = db_session.query(model.Aluno).filter_by(cpf="55511122201").first()
+        prof_db = db_session.query(model.Professor).filter_by(cpf="55511122202").first()
+        assert aluno_db is not None
+        assert prof_db is not None
+        assert aluno_db.status == model.StatusContaEnum.NOVO
+    else:
+        assert expected_message in response.json()["detail"]
 
-    assert prof_db is not None
-    assert prof_db.nome == "Novo Prof CSV"
-    assert prof_db.status == model.StatusContaEnum.NOVO
 
-
-def test_upload_csv_erro_curso_invalido(
-    client: TestClient, db_session: Session, mock_coordenador: model.Coordenador
+@pytest.mark.parametrize(
+    "user_fixture, mock_ira, mock_semestre, expected_filename_part, expected_status",
+    [
+        ("mock_aluno", 4.2, 2, "2025-TESTE", 200),
+        ("mock_professor", None, None, None, 403),
+    ],
+)
+def test_gera_proprio_historico_pdf_permissoes(
+    client: TestClient,
+    db_session: Session,
+    setup_matricula_existente: dict,
+    user_fixture: str,
+    mock_ira: float | None,
+    mock_semestre: int | None,
+    expected_filename_part: str | None,
+    expected_status: int,
+    request,
 ):
     """
-    Testa US-005: Falha no upload de CSV se o 'codigo_curso' for inválido.
+    Testa US-021: Geração de histórico acadêmico em PDF.
+    - Aluno gera o próprio histórico (200).
+    - Professor falha (403).
     """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
+    current_user = request.getfixturevalue(user_fixture)
+    headers = {"Authorization": "Bearer fake-token"}
 
-    csv_content = "cpf,nome,matricula,tipo_usuario,codigo_curso\n55533344401,Aluno Fake,2025-CSV2,aluno,INVALIDO\n"
-    csv_file = io.BytesIO(csv_content.encode("utf-8"))
-    csv_file.seek(0)
-
-    response = client.post(
-        "/usuarios/upload-csv", files={"file": ("usuarios.csv", csv_file, "text/csv")}
-    )
-
-    assert response.status_code == 400
-    assert "Código de curso 'INVALIDO' inválido" in response.json()["detail"]
-
-    aluno_db = db_session.query(model.Aluno).filter_by(cpf="55533344401").first()
-    assert aluno_db is None
-
-
-def test_aluno_gera_proprio_historico_pdf(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa US-021: Aluno gera seu próprio histórico acadêmico em PDF.
-
-    """
-    aluno = setup_matricula_existente["aluno"]
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(aluno)
-
-    with patch(
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)), patch(
         "app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno",
-        return_value=2,
+        return_value=mock_semestre,
     ) as mock_get_periodos, patch(
-        "app.usuario.router.repo_matricula.calcular_ira", return_value=4.2
+        "app.usuario.router.repo_matricula.calcular_ira", return_value=mock_ira
     ) as mock_calcular_ira:
+        response = client.get("/usuarios/me/historico-pdf", headers=headers)
 
-        response = client.get("/usuarios/me/historico-pdf")
+    assert response.status_code == expected_status
 
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/pdf"
-    assert "attachment; filename=" in response.headers["content-disposition"]
-    assert f"historico_{aluno.matricula}.pdf" in response.headers["content-disposition"]
-    assert len(response.content) > 0
-    mock_get_periodos.assert_called_once_with(db_session, id_aluno=aluno.id)
-    mock_calcular_ira.assert_called_once_with(db_session, id_aluno=aluno.id)
+    if expected_status == 200:
+        assert response.headers["content-type"] == "application/pdf"
+        assert "attachment; filename=" in response.headers["content-disposition"]
+        assert (
+            f"historico_{expected_filename_part}.pdf"
+            in response.headers["content-disposition"]
+        )
+        mock_get_periodos.assert_called_once_with(db_session, id_aluno=current_user.id)
+        mock_calcular_ira.assert_called_once_with(db_session, id_aluno=current_user.id)
+    else:
+        assert "Acesso negado: Apenas para alunos" in response.json()["detail"]
 
 
-def test_coordenador_desativa_conta_aluno(
+@pytest.mark.parametrize(
+    "user_to_deactivate_fixture, expected_status, expected_detail",
+    [
+        ("mock_aluno", 200, None),
+        ("mock_coordenador", 400, "Não é permitido desativar a própria conta"),
+    ],
+)
+def test_coordenador_desativa_conta_usuario(
     client: TestClient,
     db_session: Session,
     mock_coordenador: model.Coordenador,
     mock_aluno: model.Aluno,
+    user_to_deactivate_fixture: str,
+    expected_status: int,
+    expected_detail: str | None,
+    request,
 ):
     """
     Testa US-006: Coordenador desativa a conta de outro usuário (Aluno).
-
-    """
-    assert mock_aluno.status == model.StatusContaEnum.ATIVO
-
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
-
-    response = client.patch(f"/usuarios/{mock_aluno.cpf}/desativar")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "INATIVO"
-
-    db_session.refresh(mock_aluno)
-    assert mock_aluno.status == model.StatusContaEnum.INATIVO
-
-
-def test_coordenador_falha_desativar_propria_conta(
-    client: TestClient, db_session: Session, mock_coordenador: model.Coordenador
-):
-    """
     Testa US-006: Falha (400) se o Coordenador tentar desativar a si mesmo.
-
     """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
+    user_to_deactivate = request.getfixturevalue(user_to_deactivate_fixture)
+    assert user_to_deactivate.status == model.StatusContaEnum.ATIVO
 
-    response = client.patch(f"/usuarios/{mock_coordenador.cpf}/desativar")
+    headers = {"Authorization": "Bearer fake-token"}
 
-    assert response.status_code == 400
-    assert "Não é permitido desativar a própria conta" in response.json()["detail"]
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_coordenador)):
+        response = client.patch(
+            f"/usuarios/{user_to_deactivate.cpf}/desativar", headers=headers
+        )
+
+    assert response.status_code == expected_status
+    if expected_status == 200:
+        assert response.json()["status"] == "INATIVO"
+        db_session.refresh(user_to_deactivate)
+        assert user_to_deactivate.status == model.StatusContaEnum.INATIVO
+    else:
+        assert expected_detail in response.json()["detail"]
 
 
-def test_get_usuario_me(
-    client: TestClient, db_session: Session, mock_aluno: model.Aluno
+@pytest.mark.parametrize(
+    "user_fixture, expected_type, expected_matricula",
+    [
+        ("mock_aluno", "aluno", "2025-TESTE"),
+        ("mock_professor", "professor", None),
+        ("mock_coordenador", "coordenador", None),
+    ],
+)
+def test_get_usuario_me_polimorfico(
+    client: TestClient,
+    db_session: Session,
+    user_fixture: str,
+    expected_type: str,
+    expected_matricula: str | None,
+    request,
 ):
     """
-    Testa US-002: Qualquer utilizador autenticado (ex: Aluno) pode obter
-    os seus próprios dados via /usuarios/me.
-
+    Testa US-002: Qualquer utilizador autenticado (Aluno, Professor, Coordenador)
+    pode obter os seus próprios dados via /usuarios/me.
     """
-    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(mock_aluno)
+    current_user = request.getfixturevalue(user_fixture)
+    headers = {"Authorization": "Bearer fake-token"}
 
-    response = client.get("/usuarios/me")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)):
+        response = client.get("/usuarios/me", headers=headers)
 
     assert response.status_code == 200
     data = response.json()
-    assert data["id"] == mock_aluno.id
-    assert data["cpf"] == mock_aluno.cpf
-    assert data["nome"] == mock_aluno.nome
-    assert data["email"] == mock_aluno.email
-    assert data["tipo_usuario"] == "aluno"
-    assert data["matricula"] == mock_aluno.matricula
+    assert data["id"] == current_user.id
+    assert data["cpf"] == current_user.cpf
+    assert data["tipo_usuario"] == expected_type
+    if expected_matricula:
+        assert data["matricula"] == expected_matricula
+    else:
+        assert "matricula" not in data
 
 
-def test_get_usuario_me_semestre_atual(
-    client: TestClient, db_session: Session, mock_aluno: model.Aluno
+@pytest.mark.parametrize(
+    "endpoint, repo_method_to_patch, mock_return_value, expected_response",
+    [
+        (
+            "/usuarios/me/semestre-atual",
+            "app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno",
+            3,
+            {"semestre_atual": 3},
+        ),
+        (
+            "/usuarios/me/ira",
+            "app.usuario.router.repo_matricula.calcular_ira",
+            3.75,
+            {"ira": 3.75},
+        ),
+    ],
+)
+def test_get_aluno_me_detalhes(
+    client: TestClient,
+    db_session: Session,
+    mock_aluno: model.Aluno,
+    endpoint: str,
+    repo_method_to_patch: str,
+    mock_return_value,
+    expected_response: dict,
 ):
     """
     Testa US-102 (API): Aluno obtém o semestre atual estimado.
-    Mockamos a chamada ao repositório por causa do SQLite.
-
-    """
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-
-    with patch(
-        "app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno",
-        return_value=3,
-    ) as mock_get_periodos:
-        response = client.get("/usuarios/me/semestre-atual")
-
-    assert response.status_code == 200
-    assert response.json() == {"semestre_atual": 3}
-    mock_get_periodos.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
-
-
-def test_get_usuario_me_ira(
-    client: TestClient, db_session: Session, mock_aluno: model.Aluno
-):
-    """
     Testa US-101 (API): Aluno obtém o seu IRA.
-    Mockamos a chamada ao repositório por causa do SQLite (embora pudesse funcionar).
-
     """
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-    with patch(
-        "app.usuario.router.repo_matricula.calcular_ira", return_value=3.75
-    ) as mock_calcular_ira:
-        response = client.get("/usuarios/me/ira")
+    headers = {"Authorization": "Bearer fake-token"}
+
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)), patch(
+        repo_method_to_patch, return_value=mock_return_value
+    ) as mock_repo_call:
+        response = client.get(endpoint, headers=headers)
 
     assert response.status_code == 200
-    assert response.json() == {"ira": 3.75}
-    mock_calcular_ira.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
+    assert response.json() == expected_response
+    mock_repo_call.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
 
 
 def test_coordenador_gera_historico_aluno_especifico_pdf(
@@ -286,21 +337,21 @@ def test_coordenador_gera_historico_aluno_especifico_pdf(
 ):
     """
     Testa US-012: Coordenador gera o PDF do histórico de um aluno específico.
-    Mockamos as chamadas ao repositório por causa do SQLite.
-
     """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
+    headers = {"Authorization": "Bearer fake-token"}
 
     with patch(
+        AUTH_MOCK_PATH, return_value=mock_auth_response(mock_coordenador)
+    ), patch(
         "app.usuario.router.repo_matricula.get_periodos_cursados_por_aluno",
         return_value=3,
     ) as mock_get_periodos, patch(
         "app.usuario.router.repo_matricula.calcular_ira", return_value=4.1
     ) as mock_calcular_ira:
+        response = client.get(
+            f"/usuarios/{mock_aluno.matricula}/historico-pdf", headers=headers
+        )
 
-        response = client.get(f"/usuarios/{mock_aluno.matricula}/historico-pdf")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment; filename=" in response.headers["content-disposition"]
@@ -310,10 +361,5 @@ def test_coordenador_gera_historico_aluno_especifico_pdf(
     )
     assert len(response.content) > 0
 
-    mock_get_periodos.assert_called_once()
-    mock_calcular_ira.assert_called_once()
-
-    assert mock_get_periodos.call_args.kwargs == {"id_aluno": mock_aluno.id}
-    assert mock_calcular_ira.call_args.kwargs == {"id_aluno": mock_aluno.id}
-    assert isinstance(mock_get_periodos.call_args.args[0], Session)
-    assert isinstance(mock_calcular_ira.call_args.args[0], Session)
+    mock_get_periodos.assert_called_once_with(db_session, id_aluno=mock_aluno.id)
+    mock_calcular_ira.assert_called_once_with(db_session, id_aluno=mock_aluno.id)

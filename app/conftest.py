@@ -108,33 +108,6 @@ def mock_aluno(db_session):
     return aluno
 
 
-def mock_auth_coordenador(mock_coordenador_fixture: model.Coordenador):
-    """Função que retorna o mock do coordenador."""
-
-    def _mock():
-        return mock_coordenador_fixture
-
-    return _mock
-
-
-def mock_auth_professor(mock_professor_fixture: model.Professor):
-    """Função que retorna o mock do professor."""
-
-    def _mock():
-        return mock_professor_fixture
-
-    return _mock
-
-
-def mock_auth_aluno(mock_aluno_fixture: model.Aluno):
-    """Função que retorna o mock do aluno."""
-
-    def _mock():
-        return mock_aluno_fixture
-
-    return _mock
-
-
 @pytest.fixture
 def setup_turmas(db_session: Session, mock_professor: model.Professor):
     """

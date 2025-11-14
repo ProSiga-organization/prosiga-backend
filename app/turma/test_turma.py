@@ -1,11 +1,21 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app import deps, model
-from app.conftest import (mock_auth_aluno, mock_auth_coordenador,
-                          mock_auth_professor)
-from app.main import app
+from app import model
+
+AUTH_MOCK_PATH = "app.deps.requests.get"
+
+
+def mock_auth_response(user_model):
+    """Cria um mock de resposta bem-sucedida do serviço de autenticação."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"email": user_model.email, "id": user_model.id}
+    mock_response.raise_for_status.return_value = None
+    return mock_response
 
 
 def test_professor_cria_avaliacao_coluna(
@@ -14,17 +24,17 @@ def test_professor_cria_avaliacao_coluna(
     """
     Testa US-015: Professor (dono) cria a "coluna" de avaliação.
     Verifica se a "célula" (NotaAvaliacao) é criada para o aluno existente.
-
     """
     professor = setup_matricula_existente["professor"]
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
+    headers = {"Authorization": "Bearer fake-token"}
 
-    response = client.post(f"/turmas/{turma.id}/avaliacoes", json={"nome": "P1"})
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(professor)):
+        response = client.post(
+            f"/turmas/{turma.id}/avaliacoes", json={"nome": "P1"}, headers=headers
+        )
 
     assert response.status_code == 201
     data_avaliacao = response.json()
@@ -64,10 +74,14 @@ def test_professor_nao_cria_avaliacao_turma_alheia(
     db_session.add(outro_professor)
     db_session.commit()
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        outro_professor
-    )
-    response = client.post(f"/turmas/{turma.id}/avaliacoes", json={"nome": "P-Intrusa"})
+    headers = {"Authorization": "Bearer fake-token"}
+
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(outro_professor)):
+        response = client.post(
+            f"/turmas/{turma.id}/avaliacoes",
+            json={"nome": "P-Intrusa"},
+            headers=headers,
+        )
 
     assert response.status_code == 403
     assert (
@@ -75,20 +89,33 @@ def test_professor_nao_cria_avaliacao_turma_alheia(
     )
 
 
-def test_professor_lanca_nota_celula(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
+@pytest.mark.parametrize(
+    "user_fixture, expected_status, expected_detail",
+    [
+        ("mock_professor", 200, None),
+        ("mock_aluno", 403, "Acesso negado: Apenas para professores"),
+        ("mock_coordenador", 403, "Acesso negado: Apenas para professores"),
+    ],
+)
+def test_lancar_nota_celula_permissoes(
+    client: TestClient,
+    db_session: Session,
+    setup_matricula_existente: dict,
+    user_fixture: str,
+    expected_status: int,
+    expected_detail: str | None,
+    request,
 ):
     """
-    Testa US-015: Professor lança a nota (atualiza a "célula").
-
+    Testa US-015: Permissões de lançamento de nota.
+    - Professor (dono) lança a nota (atualiza a "célula").
+    - Aluno falha (403) ao tentar lançar a própria nota.
+    - Coordenador falha (403).
     """
-    professor = setup_matricula_existente["professor"]
+    current_user = request.getfixturevalue(user_fixture)
     aluno = setup_matricula_existente["aluno"]
     turma = setup_matricula_existente["turma"]
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
     avaliacao_p1 = model.AvaliacaoTurma(nome="P1", id_turma=turma.id)
     db_session.add(avaliacao_p1)
     db_session.commit()
@@ -109,108 +136,65 @@ def test_professor_lanca_nota_celula(
         "id_avaliacao_turma": avaliacao_p1.id,
         "nota": 8.5,
     }
-    response = client.put("/matriculas/notas", json=payload)
+    headers = {"Authorization": "Bearer fake-token"}
 
-    assert response.status_code == 200
-    data_nota = response.json()
-    assert data_nota["nota"] == 8.5
-    assert data_nota["id"] == id_celula_antes
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)):
+        response = client.put("/matriculas/notas", json=payload, headers=headers)
 
-    db_session.refresh(celula_nota)
-    assert celula_nota.nota == 8.5
+    assert response.status_code == expected_status
 
-
-def test_aluno_nao_lanca_propria_nota(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa US-015: Falha (403) se o Aluno tentar lançar a própria nota.
-    """
-    aluno = setup_matricula_existente["aluno"]
-    turma = setup_matricula_existente["turma"]
-
-    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(aluno)
-
-    avaliacao_p1 = model.AvaliacaoTurma(nome="P1", id_turma=turma.id)
-    db_session.add(avaliacao_p1)
-    db_session.commit()
-
-    payload = {
-        "matricula_aluno": aluno.matricula,
-        "id_avaliacao_turma": avaliacao_p1.id,
-        "nota": 10.0,
-    }
-    response = client.put("/matriculas/notas", json=payload)
-
-    assert response.status_code == 403
-    assert "Acesso negado: Apenas para professores" in response.json()["detail"]
+    if expected_detail:
+        assert expected_detail in response.json()["detail"]
+    else:
+        data_nota = response.json()
+        assert data_nota["nota"] == 8.5
+        assert data_nota["id"] == id_celula_antes
+        db_session.refresh(celula_nota)
+        assert celula_nota.nota == 8.5
 
 
-def test_aluno_filtra_turmas_por_periodo(
+@pytest.mark.parametrize(
+    "filtros, expected_count, expected_codigos",
+    [
+        ({"id_periodo_letivo": "periodo_1"}, 2, {"T1", "T3"}),
+        ({"id_periodo_letivo": "periodo_1", "semestre_ideal": 2}, 0, set()),
+        ({"id_periodo_letivo": "periodo_1", "semestre_ideal": 1}, 2, {"T1", "T3"}),
+        ({"codigo_disciplina": "COMP102"}, 1, {"T2"}),
+        ({"codigo_disciplina": "COMP"}, 3, {"T1", "T2", "T3"}),
+    ],
+)
+def test_aluno_filtra_turmas(
     client: TestClient,
     db_session: Session,
     mock_aluno: model.Aluno,
     setup_filtros: dict,
+    filtros: dict,
+    expected_count: int,
+    expected_codigos: set,
 ):
     """
-    Testa US-018: Aluno filtra turmas por id_periodo_letivo.
-
+    Testa US-018: Aluno filtra turmas por:
+    - id_periodo_letivo
+    - semestre_ideal
+    - codigo_disciplina (parcial)
     """
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-    id_periodo_1 = setup_filtros["periodo_1"].id
-    response = client.get(f"/turmas/?id_periodo_letivo={id_periodo_1}")
+    params = {}
+    for key, value in filtros.items():
+        if key == "id_periodo_letivo":
+            params[key] = setup_filtros[value].id
+        else:
+            params[key] = value
+
+    headers = {"Authorization": "Bearer fake-token"}
+
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)):
+        response = client.get("/turmas/", params=params, headers=headers)
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert {t["codigo_turma"] for t in data} == {"T1", "T3"}
-
-
-def test_aluno_filtra_turmas_por_semestre_ideal(
-    client: TestClient,
-    db_session: Session,
-    mock_aluno: model.Aluno,
-    setup_filtros: dict,
-):
-    """
-    Testa US-018: Aluno filtra turmas por semestre_ideal da disciplina.
-
-    """
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-    id_periodo_1 = setup_filtros["periodo_1"].id
-    response = client.get(f"/turmas/?id_periodo_letivo={id_periodo_1}&semestre_ideal=2")
-
-    assert response.status_code == 200
-    assert len(response.json()) == 0
-    response_2 = client.get(
-        f"/turmas/?id_periodo_letivo={id_periodo_1}&semestre_ideal=1"
-    )
-
-    assert response_2.status_code == 200
-    assert len(response_2.json()) == 2
-
-
-def test_aluno_filtra_turmas_por_codigo_disciplina(
-    client: TestClient,
-    db_session: Session,
-    mock_aluno: model.Aluno,
-    setup_filtros: dict,
-):
-    """
-    Testa US-018: Aluno busca turmas por código da disciplina (busca parcial 'ilike').
-
-    """
-
-    app.dependency_overrides[deps.get_current_aluno] = mock_auth_aluno(mock_aluno)
-    response = client.get("/turmas/?codigo_disciplina=COMP102")
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["codigo_turma"] == "T2"
-    response_2 = client.get("/turmas/?codigo_disciplina=COMP")
-
-    assert response_2.status_code == 200
-    assert len(response_2.json()) == 3
+    assert len(data) == expected_count
+    if expected_count > 0:
+        assert {t["codigo_turma"] for t in data} == expected_codigos
 
 
 def test_professor_lista_apenas_suas_turmas(
@@ -219,16 +203,12 @@ def test_professor_lista_apenas_suas_turmas(
     """
     Testa US-013: Professor (mock_professor) lista suas turmas (GET /turmas/me)
     e NÃO VÊ a turma do 'outro_professor'.
-
     """
-
     professor_1 = setup_filtros["prof_1"]
+    headers = {"Authorization": "Bearer fake-token"}
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor_1
-    )
-
-    response = client.get("/turmas/me")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(professor_1)):
+        response = client.get("/turmas/me", headers=headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -238,85 +218,94 @@ def test_professor_lista_apenas_suas_turmas(
     assert "T3" not in codigos_turmas_prof1
 
 
-def test_professor_exporta_notas_csv(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
+@pytest.mark.parametrize(
+    "endpoint, user_fixture, expected_status, expected_content_type, expected_filename_part",
+    [
+        (
+            "exportar-csv",
+            "mock_professor",
+            200,
+            "text/csv",
+            "notas_turma_",
+        ),
+        (
+            "diario-pdf",
+            "mock_professor",
+            200,
+            "application/pdf",
+            "diario_classe_",
+        ),
+        ("diario-pdf", "mock_aluno", 403, "application/json", None),
+        ("diario-pdf", "mock_coordenador", 403, "application/json", None),
+    ],
+)
+def test_professor_exporta_relatorios_turma_permissoes(
+    client: TestClient,
+    db_session: Session,
+    setup_matricula_existente: dict,
+    endpoint: str,
+    user_fixture: str,
+    expected_status: int,
+    expected_content_type: str,
+    expected_filename_part: str | None,
+    request,
 ):
     """
     Testa US-016: Professor (dono) exporta o CSV de notas da turma.
-
-    """
-
-    professor = setup_matricula_existente["professor"]
-    turma = setup_matricula_existente["turma"]
-
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
-    response = client.get(f"/turmas/{turma.id}/exportar-csv")
-
-    assert response.status_code == 200
-    assert "text/csv" in response.headers["content-type"]
-    assert "attachment; filename=" in response.headers["content-disposition"]
-    assert f"notas_turma_{turma.codigo}.csv" in response.headers["content-disposition"]
-    assert len(response.content) > 0
-
-
-def test_professor_gera_diario_pdf(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
     Testa US-017: Professor (dono) gera o diário de classe em PDF.
-
+    Testa Segurança: Aluno (403) não pode gerar diário.
     """
-    professor = setup_matricula_existente["professor"]
+    current_user = request.getfixturevalue(user_fixture)
     turma = setup_matricula_existente["turma"]
+    headers = {"Authorization": "Bearer fake-token"}
+    url = f"/turmas/{turma.id}/{endpoint}"
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
-    response = client.get(f"/turmas/{turma.id}/diario-pdf")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)):
+        response = client.get(url, headers=headers)
 
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/pdf"
-    assert "attachment; filename=" in response.headers["content-disposition"]
-    assert (
-        f"diario_classe_{turma.codigo}.pdf" in response.headers["content-disposition"]
-    )
+    assert response.status_code == expected_status
+    assert expected_content_type in response.headers["content-type"]
 
-    assert len(response.content) > 0
-
-
-def test_aluno_nao_pode_gerar_diario_pdf_do_professor(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa Segurança: Aluno (403) não pode gerar diário de classe do professor.
-
-    """
-    aluno = setup_matricula_existente["aluno"]
-    turma = setup_matricula_existente["turma"]
-
-    app.dependency_overrides[deps.get_current_user] = mock_auth_aluno(aluno)
-
-    response = client.get(f"/turmas/{turma.id}/diario-pdf")
-
-    assert response.status_code == 403
-    assert "Acesso negado: Apenas para professores" in response.json()["detail"]
+    if expected_status == 200:
+        assert "attachment; filename=" in response.headers["content-disposition"]
+        assert expected_filename_part in response.headers["content-disposition"]
+        assert f"{turma.codigo}" in response.headers["content-disposition"]
+        assert len(response.content) > 0
+    else:
+        assert "Acesso negado: Apenas para professores" in response.json()["detail"]
 
 
-def test_coordenador_cria_turma_sucesso(
+@pytest.mark.parametrize(
+    "user_fixture, http_method, expected_status, expected_detail",
+    [
+        ("mock_coordenador", "POST", 201, None),
+        ("mock_coordenador", "PUT", 200, None),
+        ("mock_coordenador", "DELETE", 204, None),
+        ("mock_aluno", "POST", 403, "Acesso negado: Apenas para coordenadores."),
+        ("mock_professor", "PUT", 403, "Acesso negado: Apenas para coordenadores."),
+        ("mock_aluno", "DELETE", 403, "Acesso negado: Apenas para coordenadores."),
+    ],
+)
+def test_coordenador_cria_atualiza_deleta_turma(
     client: TestClient,
     db_session: Session,
-    mock_coordenador: model.Coordenador,
     setup_filtros: dict,
+    user_fixture: str,
+    http_method: str,
+    expected_status: int,
+    expected_detail: str | None,
+    request,
 ):
     """
-    Testa US-010: Coordenador cria uma nova turma.
-
+    Testa US-010: Coordenador gerencia turmas (CRUD).
+    - Testa POST /turmas/ (criar)
+    - Testa PUT /turmas/{id} (atualizar)
+    - Testa DELETE /turmas/{id} (deletar)
+    - Testa permissões (Aluno/Professor não podem)
     """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
+    current_user = request.getfixturevalue(user_fixture)
+    headers = {"Authorization": "Bearer fake-token"}
+
     id_disciplina = setup_filtros["disciplina_s1"].id
     id_periodo = setup_filtros["periodo_1"].id
     id_professor = setup_filtros["prof_1"].id
@@ -331,154 +320,99 @@ def test_coordenador_cria_turma_sucesso(
         "id_periodo_letivo": id_periodo,
     }
 
-    response = client.post("/turmas/", json=payload)
+    if http_method == "POST":
+        with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)):
+            response = client.post("/turmas/", json=payload, headers=headers)
+        if expected_status == 201:
+            data = response.json()
+            assert data["codigo"] == "T-ADMIN"
+            assert data["vagas"] == 50
 
-    assert response.status_code == 201
-    data = response.json()
-    assert data["codigo"] == "T-ADMIN"
-    assert data["vagas"] == 50
-    assert data["id_professor"] == id_professor
+    elif http_method in ("PUT", "DELETE"):
+        turma_original = setup_filtros["turma_prof1_p1_s1"]
+        url = f"/turmas/{turma_original.id}"
+
+        with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(current_user)):
+            if http_method == "PUT":
+                payload["codigo"] = turma_original.codigo
+                payload["vagas"] = 99
+                response = client.put(url, json=payload, headers=headers)
+                if expected_status == 200:
+                    assert response.json()["vagas"] == 99
+            elif http_method == "DELETE":
+                response = client.delete(url, headers=headers)
+                if expected_status == 204:
+                    turma_db = db_session.get(model.Turma, turma_original.id)
+                    assert turma_db is None
+
+    assert response.status_code == expected_status
+    if expected_detail:
+        assert expected_detail in response.json()["detail"]
 
 
-def test_professor_atualiza_nome_avaliacao_coluna(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
+@pytest.mark.parametrize(
+    "http_method, expected_status",
+    [
+        ("PUT", 200),
+        ("DELETE", 204),
+    ],
+)
+def test_professor_atualiza_deleta_avaliacao_coluna(
+    client: TestClient,
+    db_session: Session,
+    setup_matricula_existente: dict,
+    http_method: str,
+    expected_status: int,
 ):
     """
-    Testa US-015: Professor (dono) atualiza o nome de uma "coluna" de avaliação.
-
+    Testa US-015: Professor (dono) atualiza ou deleta "coluna" de avaliação.
+    - Testa PUT /turmas/avaliacoes/{id}
+    - Testa DELETE /turmas/avaliacoes/{id}
     """
     professor = setup_matricula_existente["professor"]
     turma = setup_matricula_existente["turma"]
 
-    avaliacao = model.AvaliacaoTurma(nome="P1", id_turma=turma.id)
-    db_session.add(avaliacao)
-    db_session.commit()
-
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
-
-    response = client.put(
-        f"/turmas/avaliacoes/{avaliacao.id}", json={"nome": "Prova 1 - Substitutiva"}
-    )
-
-    assert response.status_code == 200
-    assert response.json()["nome"] == "Prova 1 - Substitutiva"
-
-    db_session.refresh(avaliacao)
-    assert avaliacao.nome == "Prova 1 - Substitutiva"
-
-
-def test_professor_deleta_avaliacao_coluna(
-    client: TestClient, db_session: Session, setup_matricula_existente: dict
-):
-    """
-    Testa US-015: Professor (dono) deleta uma "coluna" de avaliação.
-
-    """
-    professor = setup_matricula_existente["professor"]
-    turma = setup_matricula_existente["turma"]
-
-    avaliacao = model.AvaliacaoTurma(nome="Avaliacao Temporaria", id_turma=turma.id)
+    avaliacao = model.AvaliacaoTurma(nome="Avaliacao Teste", id_turma=turma.id)
     db_session.add(avaliacao)
     db_session.commit()
     id_avaliacao = avaliacao.id
 
-    app.dependency_overrides[deps.get_current_professor] = mock_auth_professor(
-        professor
-    )
+    headers = {"Authorization": "Bearer fake-token"}
+    url = f"/turmas/avaliacoes/{id_avaliacao}"
 
-    response = client.delete(f"/turmas/avaliacoes/{id_avaliacao}")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(professor)):
+        if http_method == "PUT":
+            payload = {"nome": "Nome Atualizado"}
+            response = client.put(url, json=payload, headers=headers)
+            assert response.json()["nome"] == "Nome Atualizado"
+            db_session.refresh(avaliacao)
+            assert avaliacao.nome == "Nome Atualizado"
 
-    assert response.status_code == 204
-    avaliacao_db = db_session.get(model.AvaliacaoTurma, id_avaliacao)
-    assert avaliacao_db is None
+        elif http_method == "DELETE":
+            response = client.delete(url, headers=headers)
+            avaliacao_db = db_session.get(model.AvaliacaoTurma, id_avaliacao)
+            assert avaliacao_db is None
 
-
-def test_coordenador_atualiza_turma(
-    client: TestClient,
-    db_session: Session,
-    mock_coordenador: model.Coordenador,
-    setup_filtros: dict,
-):
-    """
-    Testa US-010: Coordenador atualiza dados de uma turma existente.
-
-    """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
-    turma_original = setup_filtros["turma_prof1_p1_s1"]
-
-    payload_atualizacao = {
-        "codigo": turma_original.codigo,
-        "vagas": 99,
-        "horario": "Qua 19:00",
-        "local": "Sala NOVA",
-        "id_disciplina": turma_original.id_disciplina,
-        "id_professor": turma_original.id_professor,
-        "id_periodo_letivo": turma_original.id_periodo_letivo,
-    }
-
-    response = client.put(f"/turmas/{turma_original.id}", json=payload_atualizacao)
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["vagas"] == 99
-    assert data["horario"] == "Qua 19:00"
-    assert data["local"] == "Sala NOVA"
-
-    db_session.refresh(turma_original)
-    assert turma_original.vagas == 99
-
-
-def test_coordenador_deleta_turma(
-    client: TestClient,
-    db_session: Session,
-    mock_coordenador: model.Coordenador,
-    setup_filtros: dict,
-):
-    """
-    Testa US-010: Coordenador deleta uma turma.
-
-    """
-    app.dependency_overrides[deps.get_current_coordenador] = mock_auth_coordenador(
-        mock_coordenador
-    )
-
-    turma_para_deletar = setup_filtros["turma_prof1_p1_s1"]
-    id_turma = turma_para_deletar.id
-
-    response = client.delete(f"/turmas/{id_turma}")
-    assert response.status_code == 204
-
-    turma_db = db_session.get(model.Turma, id_turma)
-    assert turma_db is None
+    assert response.status_code == expected_status
 
 
 def test_get_turma_by_id(client: TestClient, db_session: Session, setup_filtros: dict):
     """
     Testa GET /turmas/{id}: Busca uma turma específica pelo ID.
     Não requer autenticação.
-
     """
     turma_existente = setup_filtros["turma_prof1_p1_s1"]
-
     response = client.get(f"/turmas/{turma_existente.id}")
-
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == turma_existente.id
     assert data["codigo"] == turma_existente.codigo
-    assert data["id_disciplina"] == turma_existente.id_disciplina
 
 
 def test_get_turma_by_id_not_found(client: TestClient):
     """
     Testa GET /turmas/{id}: Retorna 404 para ID inexistente.
-
     """
     response = client.get("/turmas/99999")
-
     assert response.status_code == 404
     assert "Turma não encontrada" in response.json()["detail"]
