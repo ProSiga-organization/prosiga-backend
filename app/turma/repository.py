@@ -43,7 +43,15 @@ class TurmaRepository:
         return query.all()
 
     def get_by_id(self, db: Session, id: int) -> model.Turma | None:
-        return db.query(model.Turma).filter(model.Turma.id == id).first()
+        return (
+            db.query(model.Turma)
+            .options(
+                joinedload(model.Turma.disciplina),
+                joinedload(model.Turma.professor),
+            )
+            .filter(model.Turma.id == id)
+            .first()
+        )
 
     def save(self, db: Session, turma: model.Turma) -> model.Turma:
         if turma.id:

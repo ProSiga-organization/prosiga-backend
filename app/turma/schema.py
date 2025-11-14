@@ -3,8 +3,18 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+from app.usuario.schema import ProfessorResponse
+
 # Schemas para sistema de turmas e avaliações
 
+class DisciplinaResponse(BaseModel):
+    """Schema simples para dados da disciplina"""
+    id: int
+    codigo: str
+    nome: str
+
+    class Config:
+        from_attributes = True
 
 class StatusTurmaAluno(str, enum.Enum):
     """Status da relação do aluno com a turma"""
@@ -55,7 +65,9 @@ class TurmaResponse(TurmaBase):
     """Schema de resposta completo para turma"""
 
     id: int
-    avaliacoes_definidas: List[AvaliacaoTurmaResponse] = []  # Lista de avaliações
+    avaliacoes_definidas: List[AvaliacaoTurmaResponse] = []
+    disciplina: DisciplinaResponse
+    professor: ProfessorResponse
 
     class Config:
         from_attributes = True

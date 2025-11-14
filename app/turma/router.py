@@ -34,9 +34,9 @@ def create_turma(
     current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
 ):
     """Cria uma nova turma."""
-    # Cria a turma no banco de dados
-    turma = repo.save(db, model.Turma(**request.model_dump()))
-    return turma
+    turma_nova = repo.save(db, model.Turma(**request.model_dump()))
+    turma_completa = repo.get_by_id(db, turma_nova.id)
+    return turma_completa
 
 
 @router.get(
@@ -150,10 +150,15 @@ def update_turma(
     db: Session = Depends(get_db),
     current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
 ):
-    if not repo.get_by_id(db, id):
+    turma_existente = repo.get_by_id(db, id)
+    if not turma_existente:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
-    turma = repo.save(db, model.Turma(id=id, **request.model_dump()))
-    return turma
+
+    repo.save(db, model.Turma(id=id, **request.model_dump()))
+
+    turma_atualizada = repo.get_by_id(db, id)
+    
+    return turma_atualizada
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

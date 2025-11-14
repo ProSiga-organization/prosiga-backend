@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from app.model import StatusAprovacaoEnum
+from app.turma.schema import TurmaResponse
 
 # Schemas para sistema de matrículas e notas
 
@@ -50,7 +51,8 @@ class MatriculaResponse(BaseModel):
     status: Optional[StatusAprovacaoEnum] = None
     nota_final: Optional[float] = None
 
-    notas_avaliacoes: List[NotaAvaliacaoResponse] = []  # Lista de notas nas avaliações
+    notas_avaliacoes: List[NotaAvaliacaoResponse] = []
+    turma: TurmaResponse
 
     class Config:
         from_attributes = True

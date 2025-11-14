@@ -1,5 +1,5 @@
 from sqlalchemy import distinct, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app import model
 from app.matricula import schema as matricula_schema
@@ -70,7 +70,16 @@ class MatriculaRepository:
     ) -> list[model.Matricula]:
         """Retorna todas as matrículas de um aluno específico."""
         return (
-            db.query(model.Matricula).filter(model.Matricula.id_aluno == id_aluno).all()
+            db.query(model.Matricula)
+            .options(
+                joinedload(model.Matricula.turma).options(
+                    joinedload(model.Turma.disciplina),
+                    joinedload(model.Turma.professor)
+                ),
+                selectinload(model.Matricula.notas_avaliacoes)
+            )
+            .filter(model.Matricula.id_aluno == id_aluno)
+            .all()
         )
 
     def update_matricula_status(
