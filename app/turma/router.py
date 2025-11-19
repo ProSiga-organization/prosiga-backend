@@ -183,9 +183,11 @@ def get_my_turmas(
 ):
     turmas = repo.get_turmas_by_professor(db, id_professor=current_professor.id)
     if not turmas:
-        raise HTTPException(
-            status_code=404, detail="Nenhuma turma encontrada para o professor logado."
-        )
+        return []
+
+    for t in turmas:
+        setattr(t, "qtd_matriculas", len(t.matriculas))
+        
     return turmas
 
 

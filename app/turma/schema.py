@@ -5,8 +5,6 @@ from pydantic import BaseModel
 
 from app.usuario.schema import ProfessorResponse
 
-# Schemas para sistema de turmas e avaliações
-
 class DisciplinaResponse(BaseModel):
     """Schema simples para dados da disciplina"""
     id: int
@@ -67,7 +65,9 @@ class TurmaResponse(TurmaBase):
     id: int
     avaliacoes_definidas: List[AvaliacaoTurmaResponse] = []
     disciplina: DisciplinaResponse
-    professor: ProfessorResponse
+    professor: Optional[ProfessorResponse] = None
+    
+    qtd_matriculas: int = 0
 
     class Config:
         from_attributes = True

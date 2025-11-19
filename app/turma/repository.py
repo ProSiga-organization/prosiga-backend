@@ -70,9 +70,17 @@ class TurmaRepository:
     def get_turmas_by_professor(
         self, db: Session, id_professor: int
     ) -> list[model.Turma]:
-        """Retorna todas as turmas de um professor específico."""
+        """
+        Retorna todas as turmas de um professor específico.
+        """
         return (
-            db.query(model.Turma).filter(model.Turma.id_professor == id_professor).all()
+            db.query(model.Turma)
+            .options(
+                joinedload(model.Turma.disciplina),
+                selectinload(model.Turma.matriculas)
+            )
+            .filter(model.Turma.id_professor == id_professor)
+            .all()
         )
 
     def create_avaliacao_turma(

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from app.model import StatusAprovacaoEnum
 from app.turma.schema import TurmaResponse
+from app.usuario.schema import AlunoResponse
 
 # Schemas para sistema de matrículas e notas
 
@@ -53,6 +54,7 @@ class MatriculaResponse(BaseModel):
 
     notas_avaliacoes: List[NotaAvaliacaoResponse] = []
     turma: TurmaResponse
+    aluno: Optional[AlunoResponse] = None
 
     class Config:
         from_attributes = True

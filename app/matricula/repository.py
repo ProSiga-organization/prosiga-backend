@@ -24,9 +24,17 @@ class MatriculaRepository:
     def get_matriculas_by_turma(
         self, db: Session, id_turma: int
     ) -> list[model.Matricula]:
-        """Retorna todas as matrículas de uma turma específica."""
+        """
+        Retorna todas as matrículas de uma turma específica.
+        """
         return (
-            db.query(model.Matricula).filter(model.Matricula.id_turma == id_turma).all()
+            db.query(model.Matricula)
+            .options(
+                joinedload(model.Matricula.aluno), # <--- Carrega dados do aluno
+                selectinload(model.Matricula.notas_avaliacoes)
+            )
+            .filter(model.Matricula.id_turma == id_turma)
+            .all()
         )
 
     def create(self, db: Session, matricula: model.Matricula) -> model.Matricula:
