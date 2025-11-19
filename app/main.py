@@ -9,6 +9,7 @@ from app.matricula.router import router as matricula_router
 from app.periodo_letivo.router import router as periodo_letivo_router
 from app.turma.router import router as turma_router
 from app.usuario.router import router as usuario_router
+from app.stats.router import router as stats_router
 
 # Cria as tabelas no banco de dados
 Base.metadata.create_all(bind=engine)
@@ -38,6 +39,7 @@ app.include_router(turma_router)
 app.include_router(matricula_router)
 app.include_router(aviso_router)
 app.include_router(curso_router)
+app.include_router(stats_router)
 
 
 @app.get("/")
