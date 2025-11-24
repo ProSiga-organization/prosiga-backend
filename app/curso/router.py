@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -6,12 +7,15 @@ from app import deps, model
 from app.database import get_db
 from app.relatorios import gerador_pdf
 from app.curso.repository import CursoRepository
+from app.curso import schema as curso_schema
 
-# Define as rotas da API para cursos
 router = APIRouter(prefix="/cursos", tags=["Cursos"])
-
-# Instância do repositório para operações no banco
 repo = CursoRepository()
+
+@router.get("/", response_model=List[curso_schema.CursoResponse])
+def get_all_cursos(db: Session = Depends(get_db)):
+    """Lista todos os cursos disponíveis."""
+    return repo.get_all(db)
 
 
 @router.get("/relatorio-alunos", summary="Gera o Relatório de Alunos por Curso em PDF")

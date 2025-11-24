@@ -103,3 +103,19 @@ class AvisoRepository:
             .order_by(model.Aviso.data_publicacao.desc())  # Mais recentes primeiro
             .all()
         )
+    
+    def get_all_avisos_curso(self, db: Session) -> List[model.Aviso]:
+        """
+        Retorna todos os avisos que são vinculados a cursos (avisos institucionais),
+        carregando o autor e o curso.
+        """
+        return (
+            db.query(model.Aviso)
+            .options(
+                joinedload(model.Aviso.autor),
+                joinedload(model.Aviso.curso) 
+            )
+            .filter(model.Aviso.id_curso.isnot(None))
+            .order_by(model.Aviso.data_publicacao.desc())
+            .all()
+        )

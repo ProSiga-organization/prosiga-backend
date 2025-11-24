@@ -168,3 +168,18 @@ def delete_aviso(
         )
 
     repo.delete_aviso(db, aviso_db=aviso_db)
+
+
+@router.get(
+    "/admin/list",
+    response_model=List[schema.AvisoResponse],
+    summary="Lista todos os avisos de cursos (Admin)",
+)
+def get_all_avisos_admin(
+    db: Session = Depends(get_db),
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
+):
+    """
+    (Coordenador) Lista todos os avisos institucionais (de cursos).
+    """
+    return repo.get_all_avisos_curso(db)

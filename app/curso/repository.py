@@ -1,12 +1,13 @@
 from typing import List
-
 from sqlalchemy.orm import Session, selectinload
-
 from app import model
-
 
 class CursoRepository:
     """Classe responsável pelas operações de banco de dados para cursos"""
+
+    def get_all(self, db: Session) -> List[model.Curso]:
+        """Retorna todos os cursos."""
+        return db.query(model.Curso).order_by(model.Curso.nome).all()
 
     def get_all_with_alunos(self, db: Session) -> List[model.Curso]:
         """
@@ -15,8 +16,8 @@ class CursoRepository:
         """
         return (
             db.query(model.Curso)
-            .options(selectinload(model.Curso.alunos))  # Carrega alunos junto
-            .order_by(model.Curso.nome)  # Ordenado alfabeticamente
+            .options(selectinload(model.Curso.alunos))
+            .order_by(model.Curso.nome)
             .all()
         )
 

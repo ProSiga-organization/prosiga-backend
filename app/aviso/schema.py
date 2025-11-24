@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.curso.schema import CursoResponse
+
 
 class AvisoBase(BaseModel):
     """Campos básicos compartilhados por todos os avisos"""
@@ -48,6 +50,7 @@ class AvisoResponse(AvisoBase):
     autor: AutorAvisoResponse
     id_turma: Optional[int] = None
     id_curso: Optional[int] = None
+    curso: Optional[CursoResponse] = None
 
     class Config:
         from_attributes = True
