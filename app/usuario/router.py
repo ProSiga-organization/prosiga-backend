@@ -4,7 +4,9 @@ import io
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
+from typing import List
 
+from app.usuario.schema import ProfessorResponse
 from app import deps, model
 from app.database import get_db
 from app.matricula.repository import MatriculaRepository
@@ -326,3 +328,17 @@ def get_ira(
     ira_calculado = repo_matricula.calcular_ira(db, id_aluno=current_aluno.id)
 
     return schema.IraResponse(ira=ira_calculado)
+
+
+# --- ENDPOINT PARA LISTAR TODOS OS PROFESSORES ---
+@router.get(
+    "/professores",
+    response_model=List[ProfessorResponse],
+    summary="Lista todos os professores"
+)
+def get_all_professores(
+    db: Session = Depends(get_db),
+    # current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
+):
+    """Retorna a lista de todos os professores cadastrados."""
+    return repo.get_all_professores(db)
