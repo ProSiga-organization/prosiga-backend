@@ -80,3 +80,13 @@ class UsuarioRepository:
         return (
             db.query(model.Professor).options(joinedload(model.Professor.turmas)).all()
         )
+    
+    def search_alunos(self, db: Session, term: str | None = None) -> list[model.Aluno]:
+        """Busca alunos por nome ou matrícula (parcial)."""
+        query = db.query(model.Aluno)
+        if term:
+            query = query.filter(
+                (model.Aluno.nome.ilike(f"%{term}%")) | 
+                (model.Aluno.matricula.ilike(f"%{term}%"))
+            )
+        return query.limit(20).all()

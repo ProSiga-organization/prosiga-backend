@@ -62,6 +62,23 @@ def read_users_me(current_user: model.Usuario = Depends(deps.get_current_user)):
     return current_user
 
 
+# --- ENDPOINT PARA BUSCAR ALUNOS POR NOME OU MATRÍCULA ---
+@router.get(
+    "/alunos",
+    response_model=List[schema.AlunoResponse],
+    summary="Busca alunos por nome ou matrícula"
+)
+def search_alunos(
+    term: str | None = None,
+    db: Session = Depends(get_db),
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
+):
+    """
+    (Coordenador) Busca alunos para a tela de matrícula manual.
+    """
+    return repo.search_alunos(db, term=term)
+
+
 # --- ENDPOINT PARA UPLOAD DE CSV ---
 @router.post(
     "/upload-csv",
