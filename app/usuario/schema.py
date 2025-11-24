@@ -24,6 +24,7 @@ class UsuarioBaseResponse(BaseModel):
     email: EmailStr
     status: StatusContaEnum
     tipo_usuario: str
+    id_curso: Optional[int] = None
 
     class Config:
         model_config = {"from_attributes": True}
