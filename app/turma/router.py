@@ -16,10 +16,8 @@ from app.usuario import schema as usuario_schema
 from app.turma import schema as turma_schema
 from app.turma.repository import TurmaRepository
 
-# Define as rotas da API para turmas
 router = APIRouter(prefix="/turmas", tags=["Turmas"])
 
-# Instâncias dos repositórios para operações no banco
 repo = TurmaRepository()
 repo_matricula = MatriculaRepository()
 repo_periodo = PeriodoLetivoRepository()
@@ -33,11 +31,37 @@ def create_turma(
     db: Session = Depends(get_db),
     current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
 ):
-    """Cria uma nova turma."""
     turma_nova = repo.save(db, model.Turma(**request.model_dump()))
     turma_completa = repo.get_by_id(db, turma_nova.id)
     return turma_completa
 
+# Endpoint para ADMIN listar todas as turmas
+@router.get(
+    "/admin/list",
+    response_model=List[turma_schema.TurmaResponse],
+    summary="Lista todas as turmas (Visão do Coordenador)",
+)
+def get_all_turmas_admin(
+    db: Session = Depends(get_db),
+    current_coordenador: model.Coordenador = Depends(deps.get_current_coordenador),
+    id_periodo_letivo: int | None = Query(None),
+    codigo_disciplina: str | None = Query(None),
+):
+    """
+    (Coordenador) Retorna a lista completa de turmas, incluindo dados do professor
+    e contagem de matrículas.
+    """
+    turmas = repo.get_all(
+        db, 
+        id_periodo_letivo=id_periodo_letivo, 
+        codigo_disciplina=codigo_disciplina
+    )
+    
+    # Popula o campo calculado qtd_matriculas
+    for t in turmas:
+        setattr(t, "qtd_matriculas", len(t.matriculas))
+        
+    return turmas
 
 @router.get(
     "/",
@@ -47,24 +71,10 @@ def create_turma(
 def get_all_turmas(
     db: Session = Depends(get_db),
     current_aluno: model.Aluno = Depends(deps.get_current_aluno),
-    id_periodo_letivo: int | None = Query(
-        None, description="Filtrar por ID do período letivo"
-    ),
-    semestre_ideal: int | None = Query(
-        None, description="Filtrar por semestre ideal da disciplina"
-    ),
-    codigo_disciplina: str | None = Query(
-        None, description="Buscar pelo código da disciplina (ex: 'MAT101')"
-    ),
+    id_periodo_letivo: int | None = Query(None),
+    semestre_ideal: int | None = Query(None),
+    codigo_disciplina: str | None = Query(None),
 ):
-    """
-    (Aluno) Retorna uma lista de turmas disponíveis, permitindo filtros combinados.
-    - **id_periodo_letivo:** (Obrigatório no frontend) Filtra turmas do período atual.
-    - **semestre_ideal:** Filtra disciplinas do semestre (ex: 1º, 2º).
-    - **codigo_disciplina:** Busca por código da disciplina (parcial ou completo).
-    """
-
-    # 1. Busca as turmas usando o repositório dinâmico
     turmas_encontradas = repo.get_all(
         db,
         id_periodo_letivo=id_periodo_letivo,
@@ -72,13 +82,11 @@ def get_all_turmas(
         codigo_disciplina=codigo_disciplina,
     )
 
-    # 2. Otimização: Preparar o status das disciplinas do aluno
     matriculas_aluno = repo_matricula.get_matriculas_by_aluno(
         db, id_aluno=current_aluno.id
     )
     turmas_aluno_ids = [m.id_turma for m in matriculas_aluno]
 
-    # Mapeia id_turma -> id_disciplina
     turmas_cursadas_map = {
         t.id: t.id_disciplina
         for t in db.query(model.Turma)
@@ -86,7 +94,6 @@ def get_all_turmas(
         .all()
     }
 
-    # Mapeia id_disciplina -> status (APROVADO, CURSANDO, TRANCADO)
     disciplina_status_map = {}
     for m in matriculas_aluno:
         id_disciplina = turmas_cursadas_map.get(m.id_turma)
@@ -94,33 +101,21 @@ def get_all_turmas(
             continue
 
         if m.status == model.StatusAprovacaoEnum.APROVADO:
-            disciplina_status_map[id_disciplina] = (
-                turma_schema.StatusTurmaAluno.JA_CONCLUIDO
-            )
+            disciplina_status_map[id_disciplina] = turma_schema.StatusTurmaAluno.JA_CONCLUIDO
         elif (
             m.status == model.StatusAprovacaoEnum.EM_CURSO
             and id_disciplina not in disciplina_status_map
         ):
-            disciplina_status_map[id_disciplina] = (
-                turma_schema.StatusTurmaAluno.CURSANDO
-            )
+            disciplina_status_map[id_disciplina] = turma_schema.StatusTurmaAluno.CURSANDO
         elif (
             m.status == model.StatusAprovacaoEnum.TRANCADO
             and id_disciplina not in disciplina_status_map
         ):
-            disciplina_status_map[id_disciplina] = (
-                turma_schema.StatusTurmaAluno.TRANCADO
-            )
+            disciplina_status_map[id_disciplina] = turma_schema.StatusTurmaAluno.TRANCADO
 
-    # 3. Montar a lista de resposta
     lista_resposta = []
     for turma in turmas_encontradas:
-        # (Os filtros já foram aplicados pelo repositório)
-
-        # Calcula vagas (rápido, 'matriculas' foi pré-carregado)
         vagas_disponiveis = turma.vagas - len(turma.matriculas)
-
-        # Determina o status
         status_aluno = disciplina_status_map.get(
             turma.id_disciplina, turma_schema.StatusTurmaAluno.A_FAZER
         )
@@ -153,11 +148,9 @@ def update_turma(
     turma_existente = repo.get_by_id(db, id)
     if not turma_existente:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
-
-    repo.save(db, model.Turma(id=id, **request.model_dump()))
-
-    turma_atualizada = repo.get_by_id(db, id)
     
+    repo.save(db, model.Turma(id=id, **request.model_dump()))
+    turma_atualizada = repo.get_by_id(db, id)
     return turma_atualizada
 
 
@@ -184,7 +177,7 @@ def get_my_turmas(
     turmas = repo.get_turmas_by_professor(db, id_professor=current_professor.id)
     if not turmas:
         return []
-
+    
     for t in turmas:
         setattr(t, "qtd_matriculas", len(t.matriculas))
         
@@ -209,10 +202,6 @@ def get_matriculas_for_turma(
     db: Session = Depends(get_db),
     current_professor: model.Professor = Depends(deps.get_current_professor),
 ):
-    """
-    (Professor) Retorna a lista de alunos (matrículas) em uma turma.
-    O 'MatriculaResponse' agora inclui as 'notas_avaliacoes' (células) de cada aluno.
-    """
     turma = repo.get_by_id(db, id_turma)
     if not turma:
         raise HTTPException(status_code=404, detail="Turma não encontrada.")
@@ -248,7 +237,6 @@ def create_avaliacao_coluna(
             detail="Professor não tem permissão para criar avaliações nesta turma.",
         )
 
-    # Lógica do repositório cria a "coluna" e as "células" vazias
     return repo.create_avaliacao_turma(db, request=request, id_turma=id_turma)
 
 
@@ -307,11 +295,6 @@ def get_colegas_turma(
     db: Session = Depends(get_db),
     current_aluno: model.Aluno = Depends(deps.get_current_aluno),
 ):
-    """
-    (Aluno) Retorna uma lista de colegas (nome e matrícula) matriculados
-    na mesma turma que o aluno logado.
-    """
-    # 1. Segurança: Verifica se o próprio aluno logado está na turma
     matricula_aluno_logado = repo_matricula.get_by_aluno_and_turma(
         db, id_aluno=current_aluno.id, id_turma=id_turma
     )
@@ -321,13 +304,10 @@ def get_colegas_turma(
             detail="Acesso negado. Você não está matriculado nesta turma.",
         )
 
-    # 2. Busca todas as matrículas da turma
     matriculas_da_turma = repo_matricula.get_matriculas_by_turma(db, id_turma=id_turma)
 
-    # 3. Formata a resposta para o schema ColegaResponse
     colegas = []
     for matricula in matriculas_da_turma:
-        # Verifica se a relação 'aluno' foi carregada e não é nula
         if matricula.aluno:
             colegas.append(
                 usuario_schema.ColegaResponse(
@@ -346,11 +326,6 @@ def exportar_notas_csv(
     db: Session = Depends(get_db),
     current_professor: model.Professor = Depends(deps.get_current_professor),
 ):
-    """
-    (Professor) Gera e retorna um ficheiro CSV com as notas de todos os alunos
-    matriculados na turma.
-    """
-    # 1. Validação: A turma existe e o professor é o dono?
     turma = (
         db.query(model.Turma)
         .options(joinedload(model.Turma.avaliacoes_definidas))
@@ -366,7 +341,6 @@ def exportar_notas_csv(
             status_code=403, detail="Acesso negado: Você não é o professor desta turma."
         )
 
-    # 2. Busca todos os dados (matrículas, alunos, notas)
     matriculas = (
         db.query(model.Matricula)
         .options(
@@ -379,29 +353,23 @@ def exportar_notas_csv(
         .all()
     )
 
-    # 3. Prepara o ficheiro CSV em memória
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # 4. Define as "colunas" de avaliação (ex: "Prova 1", "Trabalho 1")
     avaliacoes_colunas = sorted(turma.avaliacoes_definidas, key=lambda x: x.id)
 
-    # 5. Escreve o cabeçalho (Header)
     header = ["Matricula", "Aluno", "Status", "Nota Final"]
     header.extend([av.nome for av in avaliacoes_colunas])
     writer.writerow(header)
 
-    # 6. Escreve os dados de cada aluno
     for matricula in matriculas:
         if not matricula.aluno:
             continue
 
-        # Mapeia as notas do aluno (id_avaliacao -> nota) para busca rápida
         notas_map = {
             nota.id_avaliacao_turma: nota.nota for nota in matricula.notas_avaliacoes
         }
 
-        # Prepara a linha
         row = [
             matricula.aluno.matricula,
             matricula.aluno.nome,
@@ -409,15 +377,13 @@ def exportar_notas_csv(
             matricula.nota_final if matricula.nota_final is not None else "",
         ]
 
-        # Adiciona as notas das avaliações na ordem correta
         for av in avaliacoes_colunas:
             nota = notas_map.get(av.id)
             row.append(nota if nota is not None else "")
 
         writer.writerow(row)
 
-    # 7. Prepara a resposta para download
-    output.seek(0)  # Volta ao início do ficheiro em memória
+    output.seek(0) 
 
     headers = {
         "Content-Disposition": f"attachment; filename=notas_turma_{turma.codigo}.csv"
@@ -434,11 +400,6 @@ def exportar_diario_pdf(
     db: Session = Depends(get_db),
     current_professor: model.Professor = Depends(deps.get_current_professor),
 ):
-    """
-    (Professor) Gera e retorna um ficheiro PDF com o diário de classe
-    (alunos e notas) da turma.
-    """
-
     turma = (
         db.query(model.Turma)
         .options(
