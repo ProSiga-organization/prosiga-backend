@@ -36,8 +36,11 @@ def create_periodo_letivo(
 
 
 @router.get("/", response_model=list[schema.PeriodoLetivoResponse])
-def get_all_periodos_letivos(db: Session = Depends(get_db)):
-    """Lista todos os períodos letivos."""
+def get_all_periodos_letivos(
+    db: Session = Depends(get_db),
+    current_user: model.Usuario = Depends(deps.get_current_user)
+):
+    """Lista todos os períodos letivos. Requer autenticação."""
     return repo.get_all(db)
 
 

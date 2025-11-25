@@ -206,11 +206,7 @@ def update_matricula_status(
     if matricula_db.turma.id_professor != current_professor.id:
         raise HTTPException(status_code=403, detail="Acesso negado.")
 
-    # 3. FIX: Bloquear edição se TRANCADO
-    if matricula_db.status == model.StatusAprovacaoEnum.TRANCADO:
-        raise HTTPException(status_code=400, detail="Não é possível alterar notas de aluno trancado.")
-
-    # 4. FIX: Automação do Status (se nota_final for enviada)
+    # 3. Automação do Status (se nota_final for enviada)
     if request.nota_final is not None:
         if request.nota_final >= 5.0:
             request.status = model.StatusAprovacaoEnum.APROVADO
@@ -265,9 +261,6 @@ def create_or_update_nota_celula(
         raise HTTPException(
             status_code=404, detail="Matrícula do aluno não encontrada nesta turma."
         )
-    
-    if matricula_db.status == model.StatusAprovacaoEnum.TRANCADO:
-        raise HTTPException(status_code=400, detail="Aluno trancou esta disciplina.")
 
     # 5. Se tudo estiver OK, chama o repositório para criar ou atualizar a "célula"
     try:

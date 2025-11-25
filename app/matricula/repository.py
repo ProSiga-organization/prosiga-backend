@@ -22,20 +22,26 @@ class MatriculaRepository:
         )
 
     def get_matriculas_by_turma(
-        self, db: Session, id_turma: int
+        self, db: Session, id_turma: int, include_trancado: bool = False
     ) -> list[model.Matricula]:
         """
         Retorna todas as matrículas de uma turma específica.
+        Por padrão, exclui matrículas TRANCADAS (para uso normal).
+        Se include_trancado=True, inclui todas (para relatórios).
         """
-        return (
+        query = (
             db.query(model.Matricula)
             .options(
                 joinedload(model.Matricula.aluno), # <--- Carrega dados do aluno
                 selectinload(model.Matricula.notas_avaliacoes)
             )
             .filter(model.Matricula.id_turma == id_turma)
-            .all()
         )
+        
+        if not include_trancado:
+            query = query.filter(model.Matricula.status != model.StatusAprovacaoEnum.TRANCADO)
+        
+        return query.all()
 
     def create(self, db: Session, matricula: model.Matricula) -> model.Matricula:
         """
@@ -74,10 +80,13 @@ class MatriculaRepository:
         return matricula
 
     def get_matriculas_by_aluno(
-        self, db: Session, id_aluno: int
+        self, db: Session, id_aluno: int, include_trancado: bool = False
     ) -> list[model.Matricula]:
-        """Retorna todas as matrículas de um aluno específico."""
-        return (
+        """Retorna todas as matrículas de um aluno específico.
+        Por padrão, exclui matrículas TRANCADAS.
+        Se include_trancado=True, inclui todas (para relatórios).
+        """
+        query = (
             db.query(model.Matricula)
             .options(
                 joinedload(model.Matricula.turma).options(
@@ -87,8 +96,12 @@ class MatriculaRepository:
                 selectinload(model.Matricula.notas_avaliacoes)
             )
             .filter(model.Matricula.id_aluno == id_aluno)
-            .all()
         )
+        
+        if not include_trancado:
+            query = query.filter(model.Matricula.status != model.StatusAprovacaoEnum.TRANCADO)
+        
+        return query.all()
 
     def update_matricula_status(
         self,

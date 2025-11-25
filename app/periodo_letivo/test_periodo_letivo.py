@@ -33,12 +33,16 @@ def mock_auth_failure():
     return mock_response
 
 
-def test_get_all_periodos_letivos_vazio(client: TestClient):
+def test_get_all_periodos_letivos_vazio(client: TestClient, mock_aluno: model.Aluno):
     """
-    Testa GET /periodos-letivos/ (sem autenticação)
+    Testa GET /periodos-letivos/ (com autenticação)
     Deve retornar uma lista vazia no início.
     """
-    response = client.get("/periodos-letivos")
+    headers = {"Authorization": "Bearer fake-token"}
+    
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)):
+        response = client.get("/periodos-letivos", headers=headers)
+    
     assert response.status_code == 200
     assert response.json() == []
 
@@ -139,7 +143,8 @@ def test_get_periodo_letivo_by_id(
     assert response_criacao.status_code == 201
     id_criado = response_criacao.json()["id"]
 
-    response_busca = client.get(f"/periodos-letivos/{id_criado}")
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_coordenador)):
+        response_busca = client.get(f"/periodos-letivos/{id_criado}", headers=headers)
 
     assert response_busca.status_code == 200
     data = response_busca.json()
@@ -148,12 +153,15 @@ def test_get_periodo_letivo_by_id(
     assert data["semestre"] == 2
 
 
-def test_get_periodo_letivo_by_id_not_found(client: TestClient):
+def test_get_periodo_letivo_by_id_not_found(client: TestClient, mock_aluno: model.Aluno):
     """
     Testa GET /periodos-letivos/{id} para um ID que não existe
     Deve retornar 404 (Not Found).
     """
-    response = client.get("/periodos-letivos/999")
+    headers = {"Authorization": "Bearer fake-token"}
+    
+    with patch(AUTH_MOCK_PATH, return_value=mock_auth_response(mock_aluno)):
+        response = client.get("/periodos-letivos/999", headers=headers)
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Período letivo não encontrado."
