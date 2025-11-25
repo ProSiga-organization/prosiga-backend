@@ -183,3 +183,22 @@ def get_all_avisos_admin(
     (Coordenador) Lista todos os avisos institucionais (de cursos).
     """
     return repo.get_all_avisos_curso(db)
+
+
+@router.get(
+    "/me",
+    response_model=List[schema.AvisoResponse],
+    summary="Lista os avisos do curso do aluno logado",
+)
+def get_avisos_meu_curso(
+    db: Session = Depends(get_db),
+    current_aluno: model.Aluno = Depends(deps.get_current_aluno),
+):
+    """
+    (Aluno) Retorna os avisos do curso em que o aluno está matriculado.
+    """
+    if not current_aluno.id_curso:
+        return []
+    
+    avisos = repo.get_avisos_by_curso(db, id_curso=current_aluno.id_curso)
+    return avisos

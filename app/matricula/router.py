@@ -193,39 +193,31 @@ def update_matricula_status(
     db: Session = Depends(get_db),
     current_professor: model.Professor = Depends(deps.get_current_professor),
 ):
-    """
-    (Professor) Atualiza a nota final e/ou o status (APROVADO, REPROVADO) de um aluno,
-    identificando-o pela MATRÍCULA.
-    """
-    # 1. Encontra o aluno pela matrícula
+    # 1. Encontra aluno e matrícula
     aluno = repo_usuario.get_aluno_by_matricula(db, matricula=matricula_aluno)
     if not aluno:
-        raise HTTPException(
-            status_code=404, detail="Aluno não encontrado com esta matrícula."
-        )
+        raise HTTPException(status_code=404, detail="Aluno não encontrado.")
 
-    # 2. Usa o ID do aluno para encontrar a matrícula
     matricula_db = repo.get_by_aluno_and_turma(db, id_aluno=aluno.id, id_turma=id_turma)
     if not matricula_db:
-        raise HTTPException(
-            status_code=404,
-            detail="Matrícula não encontrada para este aluno nesta turma.",
-        )
+        raise HTTPException(status_code=404, detail="Matrícula não encontrada.")
 
-    # 3. Valida permissão do professor
+    # 2. Valida Permissão
     if matricula_db.turma.id_professor != current_professor.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Professor não tem permissão para alterar notas desta turma.",
-        )
+        raise HTTPException(status_code=403, detail="Acesso negado.")
 
-    # 4. Salva as mudanças
-    return repo.update_matricula_status(
-        db, matricula_db=matricula_db, update_data=request
-    )
+    # 3. FIX: Bloquear edição se TRANCADO
+    if matricula_db.status == model.StatusAprovacaoEnum.TRANCADO:
+        raise HTTPException(status_code=400, detail="Não é possível alterar notas de aluno trancado.")
 
-
-# --- ENDPOINT (PROFESSOR) - LANÇAR/ALTERAR "CÉLULA"  ---
+    # 4. FIX: Automação do Status (se nota_final for enviada)
+    if request.nota_final is not None:
+        if request.nota_final >= 5.0:
+            request.status = model.StatusAprovacaoEnum.APROVADO
+        else:
+            request.status = model.StatusAprovacaoEnum.REPROVADO
+    
+    return repo.update_matricula_status(db, matricula_db=matricula_db, update_data=request)
 
 
 @router.put(
@@ -273,6 +265,9 @@ def create_or_update_nota_celula(
         raise HTTPException(
             status_code=404, detail="Matrícula do aluno não encontrada nesta turma."
         )
+    
+    if matricula_db.status == model.StatusAprovacaoEnum.TRANCADO:
+        raise HTTPException(status_code=400, detail="Aluno trancou esta disciplina.")
 
     # 5. Se tudo estiver OK, chama o repositório para criar ou atualizar a "célula"
     try:
