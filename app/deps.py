@@ -1,4 +1,5 @@
 import requests
+from app.config import settings
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -7,8 +8,6 @@ from app import model
 from app.database import get_db
 from app.usuario.repository import UsuarioRepository
 
-# URL do serviço de autenticação externo
-AUTH_SERVICE_URL = "http://auth-prosiga:8000/login/me"
 
 # Esquema de segurança para tokens Bearer
 security_scheme = HTTPBearer()
@@ -28,7 +27,7 @@ def get_current_user(
     try:
         # Valida o token com o serviço de autenticação
         headers = {"Authorization": f"Bearer {token.credentials}"}
-        response = requests.get(AUTH_SERVICE_URL, headers=headers, timeout=5.0)
+        response = requests.get(settings.auth_service_url, headers=headers, timeout=10.0)
         response.raise_for_status()
 
         # Extrai o email do usuário da resposta
