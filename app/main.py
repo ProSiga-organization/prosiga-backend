@@ -32,9 +32,10 @@ origins = [
     "https://prosiga-frontend.vercel.app",
 ]
 
-# Adiciona o Middleware
+# Adiciona o Middleware com suporte a preview deployments da Vercel
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Permite todos os subdomínios da Vercel
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
