@@ -34,15 +34,17 @@ class StatusAprovacaoEnum(str, enum.Enum):
 
 class Usuario(Base):
     __tablename__ = "usuarios"
-    id: int = Column(Integer, primary_key=True, index=True)
-    cpf: str = Column(String(11), unique=True, nullable=False, index=True)
-    nome: str = Column(String(100), nullable=False)
-    email: str = Column(String(100), unique=True, nullable=True, index=True)
-    senha_hash: str = Column(String(255), nullable=False)
-    status: StatusContaEnum = Column(
-        Enum(StatusContaEnum), default=StatusContaEnum.NOVO
-    )
-    tipo_usuario: str = Column(String(50))
+    id = Column(Integer, primary_key=True, index=True)
+    cpf = Column(String(11), unique=True, nullable=False, index=True)
+    nome = Column(String(100), nullable=False)
+    email = Column(String(100), unique=True, nullable=True, index=True)
+    senha_hash = Column(String(255), nullable=False)
+    status = Column(Enum(StatusContaEnum), default=StatusContaEnum.NOVO)
+    tipo_usuario = Column(String(50))
+    # Colunas específicas de Aluno (precisam estar na classe base para single-table inheritance)
+    matricula = Column(String(20), unique=True, nullable=True)
+    id_curso = Column(Integer, nullable=True)
+    
     __mapper_args__ = {
         "polymorphic_on": tipo_usuario,
         "polymorphic_identity": "usuario",
@@ -52,10 +54,8 @@ class Usuario(Base):
 
 class Aluno(Usuario):
     __mapper_args__ = {"polymorphic_identity": "aluno"}
-    matricula: str = Column(String(20), unique=True)
     matriculas = relationship("Matricula", back_populates="aluno")
-    id_curso: int = Column(Integer, ForeignKey("cursos.id"), nullable=True)
-    curso = relationship("Curso", back_populates="alunos")
+    curso = relationship("Curso", primaryjoin="Aluno.id_curso==Curso.id", foreign_keys=[Usuario.id_curso])
 
 
 class Professor(Usuario):
@@ -69,11 +69,11 @@ class Coordenador(Usuario):
 
 class Curso(Base):
     __tablename__ = "cursos"
-    id: int = Column(Integer, primary_key=True, index=True)
-    codigo: str = Column(String(20), unique=True, nullable=False)
-    nome: str = Column(String(100), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(20), unique=True, nullable=False)
+    nome = Column(String(100), nullable=False)
     avisos = relationship("Aviso", back_populates="curso")
-    alunos = relationship("Aluno", back_populates="curso")
+    alunos = relationship("Aluno", primaryjoin="Curso.id==Usuario.id_curso", foreign_keys=[Usuario.id_curso], overlaps="curso")
 
 
 class Disciplina(Base):

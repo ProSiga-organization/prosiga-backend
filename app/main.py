@@ -15,6 +15,13 @@ from app.disciplina.router import router as disciplina_router
 # Cria as tabelas no banco de dados
 Base.metadata.create_all(bind=engine)
 
+# Executa o seed automaticamente na inicialização (apenas se tabelas estiverem vazias)
+try:
+    from app.seed import seed_data
+    seed_data()
+except Exception as e:
+    print(f"Aviso: Erro ao executar seed: {e}")
+
 # Inicializa a aplicação FastAPI
 app = FastAPI(title="PróSiga API", description="API do PróSiga.")
 

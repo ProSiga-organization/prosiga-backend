@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: back-prosiga
+    env: python
+    runtime: python-3.11.0
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: db_connect_url
+        sync: false
