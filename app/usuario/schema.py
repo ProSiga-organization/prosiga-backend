@@ -21,13 +21,13 @@ class UsuarioBaseResponse(BaseModel):
     id: int
     cpf: str
     nome: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     status: StatusContaEnum
     tipo_usuario: str
     id_curso: Optional[int] = None
 
     class Config:
-        model_config = {"from_attributes": True}
+        from_attributes = True
 
 
 class AlunoResponse(UsuarioBaseResponse):
@@ -59,7 +59,7 @@ class ColegaResponse(BaseModel):
     matricula: str
 
     class Config:
-        model_config = {"from_attributes": True}
+        from_attributes = True
 
 
 class SemestreAtualResponse(BaseModel):
