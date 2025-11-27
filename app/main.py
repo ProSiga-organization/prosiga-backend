@@ -25,19 +25,10 @@ except Exception as e:
 # Inicializa a aplicação FastAPI
 app = FastAPI(title="PróSiga API", description="API do PróSiga.")
 
-# Lista de origens permitidas para CORS (localhost e produção)
-allowed_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://0.0.0.0:3000",
-    "https://prosiga-frontend.vercel.app",
-]
-
-# Adiciona o Middleware CORS com suporte a preview deployments da Vercel
+# Adiciona o Middleware CORS - DEVE vir ANTES de incluir os routers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",  # Aceita todos os subdomínios Vercel
+    allow_origins=["*"],  # Permite todas as origens (simplificado para testes)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
