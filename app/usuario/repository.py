@@ -75,11 +75,8 @@ class UsuarioRepository:
     def get_all_professores(self, db: Session) -> list[model.Professor]:
         """
         Retorna uma lista de todos os professores cadastrados.
-        Otimizado para já carregar as turmas de cada professor.
         """
-        return (
-            db.query(model.Professor).options(joinedload(model.Professor.turmas)).all()
-        )
+        return db.query(model.Professor).all()
     
     def search_alunos(self, db: Session, term: str | None = None) -> list[model.Aluno]:
         """Busca alunos por nome ou matrícula (parcial)."""
